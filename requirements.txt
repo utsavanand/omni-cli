@@ -1,0 +1,7 @@
+# Core CLI dependencies
+prompt_toolkit>=3.0.43
+rich>=13.7.0
+
+# Configuration and data
+pyyaml>=6.0.1
+python-dateutil>=2.8.2

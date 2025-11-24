@@ -1,0 +1,89 @@
+#!/usr/bin/env node
+
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+/**
+ * Check if Python is available and return the command
+ */
+function checkPython() {
+  const { spawnSync } = require('child_process');
+  const pythonCommands = ['python3', 'python'];
+
+  for (const cmd of pythonCommands) {
+    try {
+      const result = spawnSync(cmd, ['--version'], {
+        stdio: 'pipe',
+        encoding: 'utf8'
+      });
+
+      if (result.status === 0) {
+        // Check version is 3.9+
+        const versionMatch = result.stdout.match(/Python (\d+)\.(\d+)/);
+        if (versionMatch) {
+          const major = parseInt(versionMatch[1]);
+          const minor = parseInt(versionMatch[2]);
+
+          if (major === 3 && minor >= 9) {
+            return cmd;
+          } else if (major > 3) {
+            return cmd;
+          }
+        }
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Main entry point
+ */
+function main() {
+  // Check for Python
+  const pythonCmd = checkPython();
+
+  if (!pythonCmd) {
+    console.error('Error: Python 3.9+ is required but not found');
+    console.error('');
+    console.error('Please install Python from: https://www.python.org/downloads/');
+    console.error('');
+    process.exit(1);
+  }
+
+  // Get path to Python app
+  const srcPath = path.join(__dirname, '..', 'src', 'main.py');
+
+  // Check if main.py exists
+  if (!fs.existsSync(srcPath)) {
+    console.error('Error: Omni CLI installation is corrupted');
+    console.error(`Missing: ${srcPath}`);
+    console.error('');
+    console.error('Please reinstall: npm install -g omni-cli');
+    process.exit(1);
+  }
+
+  // Run the Python app
+  const child = spawn(pythonCmd, [srcPath, ...process.argv.slice(2)], {
+    stdio: 'inherit',
+    env: process.env
+  });
+
+  // Handle exit
+  child.on('exit', (code) => {
+    process.exit(code || 0);
+  });
+
+  // Handle errors
+  child.on('error', (err) => {
+    console.error('Error running omni:', err.message);
+    process.exit(1);
+  });
+}
+
+// Run
+main();

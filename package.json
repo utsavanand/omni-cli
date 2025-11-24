@@ -1,0 +1,49 @@
+{
+  "name": "omni-cli",
+  "version": "0.1.0",
+  "description": "Unified CLI wrapper for AI models (Claude, ChatGPT, Grok)",
+  "keywords": [
+    "ai",
+    "cli",
+    "claude",
+    "chatgpt",
+    "openai",
+    "grok",
+    "llm",
+    "chat",
+    "assistant"
+  ],
+  "homepage": "https://github.com/omni-cli/omni#readme",
+  "bugs": {
+    "url": "https://github.com/omni-cli/omni/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omni-cli/omni.git"
+  },
+  "license": "MIT",
+  "author": "Omni CLI Contributors",
+  "bin": {
+    "omni": "./bin/omni"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "scripts/",
+    "requirements.txt",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/setup.js",
+    "test": "echo \"Testing not yet implemented\" && exit 0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
+}
