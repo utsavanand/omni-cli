@@ -1,28 +1,22 @@
 <p align="center">
-  <img src="logo.png" alt="Omni CLI" width="200"/>
+  <img src="banner.png" alt="Omni CLI" width="100%"/>
 </p>
 
 # Omni CLI
 
-<p align="center">
-  <em>Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemini, and more.</em>
-</p>
-
-<p align="center">
-  <img src="banner.png" alt="Omni CLI Banner" width="100%"/>
-</p>
+Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemini, and more.
 
 ## Features
 
-- 🤖 **Multi-Provider Support** - Claude, Codex/OpenAI, and Gemini in one place
-- 🔄 **Switch Providers Mid-Conversation** - Compare responses from different AIs
-- 🤝 **Consult Multiple Providers** - Get merged insights from multiple AIs in one response
-- 💾 **Persistent Memory** - All conversations saved automatically with full context
-- 🔗 **Context Sharing** - Ask Claude, then get Codex's opinion with full conversation history
-- 📁 **Project Organization** - Group related chats into projects
-- 🔍 **Full-Text Search** - Find any conversation instantly
-- ⚡ **Simple Interface** - Just type to chat, use `/commands` for features
-- 📝 **Markdown Storage** - All chats saved as readable markdown files
+- **Multi-Provider Support** - Claude, Codex/OpenAI, and Gemini in one place
+- **Switch Providers Mid-Conversation** - Compare responses from different AIs
+- **Consult Multiple Providers** - Get merged insights from multiple AIs in one response
+- **Persistent Memory** - All conversations saved automatically with full context
+- **Context Sharing** - Ask Claude, then get Codex's opinion with full conversation history
+- **Project Organization** - Group related chats into projects
+- **Full-Text Search** - Find any conversation instantly
+- **Simple Interface** - Just type to chat, use `/commands` for features
+- **Markdown Storage** - All chats saved as readable markdown files
 
 ## Installation
 
@@ -261,19 +255,19 @@ omni> /resume claude         # Shows only chats using Claude provider
 
 ## Current Status
 
-**MVP Complete** ✅ Ready for v0.1.0
+**MVP Complete - Ready for v0.1.0**
 
 **Core Features:**
-- ✅ Multi-provider support (Claude, Codex/OpenAI, Gemini)
-- ✅ Switch providers mid-conversation with full context sharing
-- ✅ `/consult` command to merge insights from multiple providers
-- ✅ Auto-generated chat names with manual naming option
-- ✅ Persistent file storage in Markdown format
-- ✅ Full conversation history preserved across sessions
-- ✅ Interactive `/resume` with arrow key navigation
-- ✅ Full-text search with `/find`
-- ✅ Complete help system
-- ✅ Chat deletion with confirmation
+- Multi-provider support (Claude, Codex/OpenAI, Gemini)
+- Switch providers mid-conversation with full context sharing
+- `/consult` command to merge insights from multiple providers
+- Auto-generated chat names with manual naming option
+- Persistent file storage in Markdown format
+- Full conversation history preserved across sessions
+- Interactive `/resume` with arrow key navigation
+- Full-text search with `/find`
+- Complete help system
+- Chat deletion with confirmation
 
 **Coming in Future Versions:**
 - Projects and folders for better organization
