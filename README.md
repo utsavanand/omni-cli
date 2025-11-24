@@ -18,14 +18,46 @@ Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemi
 
 ### Prerequisites
 
-- **Node.js 16+** (for installation)
-- **Python 3.9+** (runtime requirement)
-- **At least one AI CLI** installed:
-  - [Claude Code](https://claude.ai/download) - Anthropic's Claude
-  - [Codex CLI](https://www.codex.dev/) - OpenAI's coding assistant
-  - [Gemini CLI](https://ai.google.dev/) - Google's Gemini
+Omni CLI is a **lightweight wrapper** - you need to install AI providers first:
 
-### Local Development Installation
+#### Required:
+- **Node.js 16+** - For omni-cli installation
+- **Python 3.9+** - Runtime requirement
+
+#### AI Providers (Install at least one):
+
+**Claude Code** (Recommended):
+```bash
+# Download from https://claude.ai/download
+# Or install via npm (if available)
+```
+[Installation Guide →](https://claude.ai/download)
+
+**OpenAI/Codex CLI**:
+```bash
+# Installation instructions at OpenAI's docs
+```
+[Installation Guide →](https://platform.openai.com/docs)
+
+**Google Gemini CLI**:
+```bash
+# Installation instructions at Google AI
+```
+[Installation Guide →](https://ai.google.dev/)
+
+> **Note**: Omni CLI will detect which providers you have installed and make them available automatically. You don't need all of them - just install the ones you want to use!
+
+### Install Omni CLI
+
+**Option 1: From npm** (once published):
+```bash
+npm install -g omni-cli
+
+# Run setup wizard to check providers
+omni --setup
+```
+
+**Option 2: Local Development**
 
 Since this package is not yet published to npm, install it locally:
 
@@ -33,11 +65,8 @@ Since this package is not yet published to npm, install it locally:
 # Clone or navigate to the project directory
 cd /path/to/omni-cli
 
-# Install dependencies
+# Install dependencies (automatically installs Python deps too)
 npm install
-
-# Install Python dependencies
-pip install -r requirements.txt
 
 # Link the package globally for local testing
 npm link
@@ -46,13 +75,36 @@ npm link
 node bin/omni
 ```
 
+> **Note**: `npm install` automatically runs the setup script which installs Python dependencies. No need to run `pip install` separately!
+
 ### Verify Installation
 
+Run the setup wizard to check which providers are detected:
+
+```bash
+omni --setup
+```
+
+Output example:
+```
+Omni CLI Setup Wizard
+
+Checking for installed AI providers...
+
+✓ Claude Code              installed
+✗ OpenAI/Codex CLI        not installed
+✗ Google Gemini CLI       not installed
+
+✓ Found 1 provider(s): claude
+
+You're ready to use Omni CLI!
+Run omni to start chatting.
+```
+
+Then start chatting:
 ```bash
 omni
 ```
-
-Omni will detect installed AI providers automatically and start the interactive session.
 
 ### Publishing (For Maintainers)
 

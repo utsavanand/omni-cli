@@ -51,18 +51,75 @@ Type your message to start chatting, or /help for more info!
     """.strip()
     console.print(Panel(welcome, border_style="cyan"))
 
+def run_setup_wizard():
+    """Run setup wizard to check and guide provider installation"""
+    console.print("\n[bold cyan]Omni CLI Setup Wizard[/bold cyan]\n")
+    console.print("Checking for installed AI providers...\n")
+
+    provider_manager = ProviderManager()
+    installed = provider_manager.get_installed_providers()
+    all_providers = provider_manager.get_all_providers()
+
+    # Show status of each provider
+    providers_info = {
+        'claude': {
+            'name': 'Claude Code',
+            'url': 'https://claude.ai/download',
+            'install': 'Download from https://claude.ai/download'
+        },
+        'codex': {
+            'name': 'OpenAI/Codex CLI',
+            'url': 'https://platform.openai.com/docs',
+            'install': 'See installation guide at https://platform.openai.com/docs'
+        },
+        'gemini': {
+            'name': 'Google Gemini CLI',
+            'url': 'https://ai.google.dev/',
+            'install': 'See installation guide at https://ai.google.dev/'
+        }
+    }
+
+    for provider in all_providers:
+        if provider in installed:
+            console.print(f"[green]✓[/green] {providers_info[provider]['name']:<25} [dim]installed[/dim]")
+        else:
+            console.print(f"[red]✗[/red] {providers_info[provider]['name']:<25} [dim]not installed[/dim]")
+
+    console.print()
+
+    if installed:
+        console.print(f"[green]✓ Found {len(installed)} provider(s): {', '.join(installed)}[/green]")
+        console.print("\n[bold]You're ready to use Omni CLI![/bold]")
+        console.print("Run [cyan]omni[/cyan] to start chatting.\n")
+    else:
+        console.print("[yellow]⚠  No AI providers found![/yellow]\n")
+        console.print("[bold]To use Omni CLI, install at least one provider:[/bold]\n")
+
+        for provider in all_providers:
+            info = providers_info[provider]
+            console.print(f"[cyan]{info['name']}:[/cyan]")
+            console.print(f"  {info['install']}\n")
+
+        console.print("After installation, run [cyan]omni --setup[/cyan] again to verify.\n")
+
 def main():
     """Main entry point"""
+    # Check for setup flag
+    if len(sys.argv) > 1 and sys.argv[1] == '--setup':
+        return run_setup_wizard()
+
     # Initialize components
     chat_manager = ChatManager()
     provider_manager = ProviderManager()
 
     # Check if any provider is available
     if not provider_manager.has_providers():
-        console.print("[red]Error: No AI CLI found[/red]")
-        console.print("Please install at least one AI CLI:")
-        console.print("  - Claude CLI (Claude Code): https://claude.ai/download")
-        console.print("  - Codex CLI: https://www.codex.dev/")
+        console.print("[red]⚠  No AI providers found![/red]\n")
+        console.print("Omni CLI is a wrapper that requires AI providers to be installed.")
+        console.print("Run [cyan]omni --setup[/cyan] for installation instructions.\n")
+        console.print("Quick links:")
+        console.print("  - Claude Code: https://claude.ai/download")
+        console.print("  - OpenAI CLI: https://platform.openai.com/docs")
         console.print("  - Gemini CLI: https://ai.google.dev/")
         return 1
 
