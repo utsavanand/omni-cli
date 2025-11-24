@@ -1,6 +1,16 @@
+<p align="center">
+  <img src="logo.png" alt="Omni CLI" width="200"/>
+</p>
+
 # Omni CLI
 
-Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemini, and more.
+<p align="center">
+  <em>Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemini, and more.</em>
+</p>
+
+<p align="center">
+  <img src="banner.png" alt="Omni CLI Banner" width="100%"/>
+</p>
 
 ## Features
 
