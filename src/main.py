@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Omni CLI - Unified wrapper for AI models
-Phase 1: Proof of Concept
+Multi-provider chat interface with hierarchical organization
 """
 
 import sys
+import re
 from pathlib import Path
 
 # Add src to path for imports
@@ -25,9 +26,150 @@ from rich.table import Table
 
 from chat import ChatManager
 from providers import ProviderManager
+from project import ProjectManager
+from namespace import NamespaceManager
 
 # Initialize console for rich output
 console = Console()
+
+
+# ============================================================================
+# Helper Functions for Command Parsing and Validation
+# ============================================================================
+
+def parse_flag(args_string, flag_name):
+    """
+    Parse a flag and its value from an argument string.
+
+    Args:
+        args_string: The full argument string (e.g., "chat-name --project my-webapp")
+        flag_name: The flag to look for (e.g., "--project")
+
+    Returns:
+        tuple: (flag_value, remaining_args) or (None, args_string) if flag not found
+
+    Examples:
+        >>> parse_flag("chat-name --project webapp", "--project")
+        ("webapp", "chat-name")
+        >>> parse_flag("just-a-name", "--project")
+        (None, "just-a-name")
+    """
+    if not args_string:
+        return None, args_string
+
+    parts = args_string.split()
+
+    if flag_name not in parts:
+        return None, args_string
+
+    try:
+        flag_idx = parts.index(flag_name)
+        if flag_idx + 1 < len(parts):
+            flag_value = parts[flag_idx + 1]
+            # Remove flag and value from parts
+            remaining_parts = [p for i, p in enumerate(parts) if i not in [flag_idx, flag_idx + 1]]
+            remaining_args = ' '.join(remaining_parts)
+            return flag_value, remaining_args
+        else:
+            # Flag exists but no value provided
+            return '', args_string
+    except (ValueError, IndexError):
+        return None, args_string
+
+
+def parse_quoted_flag(args_string, flag_name):
+    """
+    Parse a flag that may have quoted or unquoted value.
+
+    Args:
+        args_string: The full argument string
+        flag_name: The flag to look for (e.g., "--description")
+
+    Returns:
+        tuple: (flag_value, remaining_args) or (None, args_string) if flag not found
+
+    Examples:
+        >>> parse_quoted_flag('name --description "My desc"', "--description")
+        ("My desc", "name")
+        >>> parse_quoted_flag('name --description simple', "--description")
+        ("simple", "name")
+    """
+    if not args_string:
+        return None, args_string
+
+    # Try to match quoted or unquoted value
+    pattern = rf'{flag_name}\s+["\']([^"\']+)["\']|{flag_name}\s+(\S+)'
+    match = re.search(pattern, args_string)
+
+    if match:
+        flag_value = match.group(1) or match.group(2)
+        # Remove the flag and value from args_string
+        remaining_args = args_string[:match.start()].strip() + ' ' + args_string[match.end():].strip()
+        remaining_args = remaining_args.strip()
+        return flag_value, remaining_args
+
+    return None, args_string
+
+
+def parse_subcommand(args_string):
+    """
+    Parse a subcommand and its arguments.
+
+    Args:
+        args_string: The full argument string
+
+    Returns:
+        tuple: (subcommand, subargs) or (None, None) if no args
+
+    Examples:
+        >>> parse_subcommand("create my-project")
+        ("create", "my-project")
+        >>> parse_subcommand("list")
+        ("list", "")
+    """
+    if not args_string:
+        return None, None
+
+    parts = args_string.split(maxsplit=1)
+    subcommand = parts[0]
+    subargs = parts[1] if len(parts) > 1 else ''
+
+    return subcommand, subargs
+
+
+def validate_name(name, entity_type="name"):
+    """
+    Validate a name for projects, namespaces, or chats.
+
+    Args:
+        name: The name to validate
+        entity_type: Type of entity (for error messages)
+
+    Returns:
+        tuple: (is_valid, error_message)
+
+    Examples:
+        >>> validate_name("my-project")
+        (True, None)
+        >>> validate_name("")
+        (False, "Name cannot be empty")
+    """
+    if not name or not name.strip():
+        return False, f"{entity_type.capitalize()} name cannot be empty"
+
+    if len(name) > 100:
+        return False, f"{entity_type.capitalize()} name too long (max 100 characters)"
+
+    # Check for invalid characters (basic validation)
+    if name.strip() != name:
+        return False, f"{entity_type.capitalize()} name cannot start or end with whitespace"
+
+    return True, None
+
+
+# ============================================================================
+# UI Functions
+# ============================================================================
 
 def print_welcome():
     """Display welcome message"""
@@ -42,6 +184,8 @@ Commands:
   /resume [keyword]       - Interactive menu to resume a chat
   /delete <id/name>       - Delete a chat
   /find <term>            - Search through chat history
+  /namespace              - Namespace management commands
+  /project                - Project management commands
   /providers              - List available AI providers
   /use <provider>         - Switch to different provider
   /consult <provider> ... - Get merged response from multiple providers
@@ -111,6 +255,8 @@ def main():
     # Initialize components
     chat_manager = ChatManager()
     provider_manager = ProviderManager()
+    project_manager = ProjectManager()
+    namespace_manager = NamespaceManager()
 
     # Check if any provider is available
     if not provider_manager.has_providers():
@@ -178,6 +324,29 @@ def main():
                               Example: /find authentication
   [cyan]/delete <id/name>[/cyan]       Delete a chat (with confirmation)
 
+[bold]Namespace Management:[/bold]
+  [cyan]/namespace create <name>[/cyan] Create a new namespace (group of projects)
+                              Example: /namespace create work-projects
+  [cyan]/namespace list[/cyan]          List all namespaces
+  [cyan]/namespace add <namespace> <project-id>[/cyan]
+                              Add project to namespace
+  [cyan]/namespace remove <namespace> <project-id>[/cyan]
+                              Remove project from namespace
+  [cyan]/namespace projects <namespace>[/cyan]
+                              List projects in namespace
+  [cyan]/namespace delete <namespace>[/cyan]
+                              Delete a namespace
+
+[bold]Project Management:[/bold]
+  [cyan]/project create <name>[/cyan]  Create a new project
+  [cyan]/project list[/cyan]           List all projects
+  [cyan]/project add <project> <chat-id>[/cyan]
+                              Add chat to project
+  [cyan]/project remove <project> <chat-id>[/cyan]
+                              Remove chat from project
+  [cyan]/project chats <project>[/cyan] List chats in project
+  [cyan]/project delete <project>[/cyan] Delete a project
+
 [bold]Utilities:[/bold]
   [cyan]/help[/cyan]                   Show this help message
   [cyan]/exit[/cyan] or [cyan]/quit[/cyan]         Exit omni
@@ -185,11 +354,16 @@ def main():
 [bold]Quick Tips:[/bold]
   • Just type naturally to start chatting (no command needed)
   • Chats are auto-saved with context
+  • Organize chats into projects, and projects into namespaces
   • Switch providers mid-conversation to get different perspectives
   • Use /consult to merge insights from multiple AIs
 
 [bold]Examples:[/bold]
   omni> how do I implement OAuth?          [dim]# Start chatting[/dim]
+  omni> /namespace create work-projects    [dim]# Create a namespace[/dim]
+  omni> /project create my-webapp          [dim]# Create a project[/dim]
+  omni> /namespace add work-projects proj123 [dim]# Add project to namespace[/dim]
+  omni> /project add my-webapp abc123      [dim]# Add chat to project[/dim]
   omni> /use codex                         [dim]# Switch to Codex[/dim]
   omni> can you show code examples?        [dim]# Continue with new provider[/dim]
   omni> /consult gemini what's best?       [dim]# Get merged response[/dim]
@@ -207,14 +381,50 @@ def main():
                 # /new - create a new named chat
                 elif command == '/new':
                     if not args:
-                        console.print("[yellow]Usage: /new <chat-name>[/yellow]")
-                        console.print("[dim]Example: /new my-feature-chat[/dim]")
+                        console.print("[yellow]Usage: /new <chat-name> [--project <project-name>][/yellow]")
+                        console.print("[dim]Examples:[/dim]")
+                        console.print("[dim]  /new my-feature-chat[/dim]")
+                        console.print("[dim]  /new authentication --project my-webapp[/dim]")
                         continue
 
-                    # Create new chat with provided name
-                    current_chat = chat_manager.create_chat(name=args)
-                    console.print(f"[green]✓ Created new chat: {args}[/green]")
+                    # Parse --project flag
+                    project_name, remaining_args = parse_flag(args, '--project')
+
+                    # Handle flag without value
+                    if project_name == '':
+                        console.print("[yellow]--project requires a project name[/yellow]")
+                        continue
+
+                    # Get chat name from remaining args
+                    chat_name = remaining_args.strip() if remaining_args else None
+                    if not chat_name:
+                        console.print("[yellow]Chat name is required[/yellow]")
+                        console.print("[dim]Usage: /new <chat-name> [--project <project-name>][/dim]")
+                        continue
+
+                    # Validate chat name
+                    valid, error_msg = validate_name(chat_name, "chat")
+                    if not valid:
+                        console.print(f"[red]{error_msg}[/red]")
+                        continue
+
+                    # Get project ID if project name provided
+                    project_id = None
+                    if project_name:
+                        project = project_manager.get_project(project_name)
+                        if project:
+                            project_id = project['id']
+                        else:
+                            console.print(f"[yellow]Warning: Project '{project_name}' not found. Creating chat without project.[/yellow]")
+
+                    # Create new chat with provided name and optional project
+                    current_chat = chat_manager.create_chat(name=chat_name, project=project_id)
+                    console.print(f"[green]✓ Created chat: {chat_name}[/green]")
                     console.print(f"[dim]Chat ID: {current_chat['chat_id']}[/dim]")
+                    if project_id:
+                        console.print(f"[dim]Project: {project_name}[/dim]")
+                        # Add chat to project
+                        project_manager.add_chat(project_name, current_chat['chat_id'])
                     console.print("[dim]Start chatting below:[/dim]\n")
                     continue
 
@@ -321,20 +531,104 @@ def main():
                         console.print("[dim]No chats yet. Start chatting to create your first chat![/dim]")
                         continue
 
-                    console.print("\n[bold]Saved Chats:[/bold]")
-                    console.print("[dim]ID       Name                          Provider  Messages  Last Updated[/dim]")
-                    console.print("[dim]" + "─" * 75 + "[/dim]")
+                    # Get all namespaces and projects for hierarchy
+                    namespaces = namespace_manager.list_namespaces()
+                    namespace_lookup = {ns['id']: ns for ns in namespaces}
 
-                    for chat_info in sorted(chats, key=lambda x: x['updated_at'], reverse=True):
-                        chat_id = chat_info['chat_id']
-                        name = chat_info['name'][:28] + '...' if len(chat_info['name']) > 28 else chat_info['name']
-                        provider = chat_info['provider']
-                        msg_count = chat_info['message_count']
-                        updated = chat_info['updated_at'][:10]  # Just the date
+                    projects = project_manager.list_projects()
+                    project_lookup = {p['id']: p for p in projects}
 
-                        console.print(f"{chat_id}  {name:<30} {provider:<9} {msg_count:<9} {updated}")
+                    # Group projects by namespace
+                    namespace_projects = {}
+                    standalone_projects = []
 
-                    console.print()
+                    for project in projects:
+                        namespace_id = project.get('namespace')
+                        if namespace_id and namespace_id in namespace_lookup:
+                            if namespace_id not in namespace_projects:
+                                namespace_projects[namespace_id] = []
+                            namespace_projects[namespace_id].append(project['id'])
+                        else:
+                            standalone_projects.append(project['id'])
+
+                    # Group chats by project
+                    project_chats = {}
+                    standalone_chats = []
+
+                    for chat in chats:
+                        project_id = chat.get('project')
+                        if project_id and project_id in project_lookup:
+                            if project_id not in project_chats:
+                                project_chats[project_id] = []
+                            project_chats[project_id].append(chat)
+                        else:
+                            standalone_chats.append(chat)
+
+                    # Sort chats within each project by most recent
+                    for project_id in project_chats:
+                        project_chats[project_id].sort(key=lambda x: x['updated_at'], reverse=True)
+                    standalone_chats.sort(key=lambda x: x['updated_at'], reverse=True)
+
+                    # Display hierarchical list
+                    console.print("\n[bold]All Chats:[/bold]")
+                    console.print("[dim]" + "─" * 75 + "[/dim]\n")
+
+                    total_displayed = 0
+
+                    # Show namespace → project → chat hierarchy
+                    for namespace_id, project_ids in namespace_projects.items():
+                        namespace = namespace_lookup[namespace_id]
+                        console.print(f"[bold cyan]📦 {namespace['name']}[/bold cyan] [dim]({len(project_ids)} projects)[/dim]")
+
+                        for project_id in project_ids:
+                            project = project_lookup[project_id]
+                            chats_in_project = project_chats.get(project_id, [])
+                            console.print(f"  [bold]📁 {project['name']}[/bold] [dim]({len(chats_in_project)} chats)[/dim]")
+
+                            for chat in chats_in_project:
+                                name = chat['name'][:30]
+                                provider = chat['provider']
+                                msg_count = chat['message_count']
+                                updated = chat['updated_at'][:10]
+                                console.print(f"    [cyan]{chat['chat_id']}[/cyan]  {name:<32} {provider:<7} {msg_count:>2} msgs  {updated}")
+                                total_displayed += 1
+
+                        console.print()
+
+                    # Show standalone projects
+                    if standalone_projects:
+                        if namespace_projects:
+                            console.print("[bold cyan]📦 [Standalone Projects][/bold cyan]")
+
+                        for project_id in standalone_projects:
+                            project = project_lookup[project_id]
+                            chats_in_project = project_chats.get(project_id, [])
+                            console.print(f"  [bold]📁 {project['name']}[/bold] [dim]({len(chats_in_project)} chats)[/dim]")
+
+                            for chat in chats_in_project:
+                                name = chat['name'][:30]
+                                provider = chat['provider']
+                                msg_count = chat['message_count']
+                                updated = chat['updated_at'][:10]
+                                console.print(f"    [cyan]{chat['chat_id']}[/cyan]  {name:<32} {provider:<7} {msg_count:>2} msgs  {updated}")
+                                total_displayed += 1
+
+                        console.print()
+
+                    # Show standalone chats
+                    if standalone_chats:
+                        console.print("[bold cyan]📄 [Standalone Chats][/bold cyan]")
+                        for chat in standalone_chats:
+                            name = chat['name'][:30]
+                            provider = chat['provider']
+                            msg_count = chat['message_count']
+                            updated = chat['updated_at'][:10]
+                            console.print(f"  [cyan]{chat['chat_id']}[/cyan]  {name:<32} {provider:<7} {msg_count:>2} msgs  {updated}")
+                            total_displayed += 1
+
+                        console.print()
+
+                    console.print(f"[dim]Total: {total_displayed} chat(s)[/dim]\n")
                     continue
 
                 # /resume - interactively resume a previous chat
@@ -357,11 +651,92 @@ def main():
                             continue
                         chats = filtered_chats
 
-                    # Sort by most recent
-                    chats = sorted(chats, key=lambda x: x['updated_at'], reverse=True)
+                    # Get all namespaces, projects, and build hierarchy
+                    namespaces = namespace_manager.list_namespaces()
+                    namespace_lookup = {ns['id']: ns for ns in namespaces}
+
+                    projects = project_manager.list_projects()
+                    project_lookup = {p['id']: p for p in projects}
+
+                    # Group projects by namespace
+                    namespace_projects = {}  # namespace_id -> list of project_ids
+                    standalone_projects = []  # projects without namespace
+
+                    for project in projects:
+                        namespace_id = project.get('namespace')
+                        if namespace_id and namespace_id in namespace_lookup:
+                            if namespace_id not in namespace_projects:
+                                namespace_projects[namespace_id] = []
+                            namespace_projects[namespace_id].append(project['id'])
+                        else:
+                            standalone_projects.append(project['id'])
+
+                    # Group chats by project
+                    project_chats = {}  # project_id -> list of chats
+                    standalone_chats = []  # chats without project
+
+                    for chat in chats:
+                        project_id = chat.get('project')
+                        if project_id and project_id in project_lookup:
+                            if project_id not in project_chats:
+                                project_chats[project_id] = []
+                            project_chats[project_id].append(chat)
+                        else:
+                            standalone_chats.append(chat)
+
+                    # Sort chats within each project by most recent
+                    for project_id in project_chats:
+                        project_chats[project_id].sort(key=lambda x: x['updated_at'], reverse=True)
+                    standalone_chats.sort(key=lambda x: x['updated_at'], reverse=True)
+
+                    # Build flat list for navigation with hierarchy headers
+                    display_items = []  # List of (type, data) tuples
+
+                    # Add namespace → project → chat hierarchy
+                    for namespace_id, project_ids in namespace_projects.items():
+                        namespace = namespace_lookup[namespace_id]
+                        display_items.append(('namespace_header', namespace))
+
+                        for project_id in project_ids:
+                            project = project_lookup[project_id]
+                            chat_count = len(project_chats.get(project_id, []))
+                            display_items.append(('project_header', {'project': project, 'chat_count': chat_count}))
+
+                            for chat in project_chats.get(project_id, []):
+                                display_items.append(('chat', chat))
+
+                    # Add standalone projects (not in any namespace)
+                    if standalone_projects:
+                        if namespace_projects:  # Only show header if there are namespaces above
+                            display_items.append(('standalone_projects_header', None))
+
+                        for project_id in standalone_projects:
+                            project = project_lookup[project_id]
+                            chat_count = len(project_chats.get(project_id, []))
+                            display_items.append(('project_header', {'project': project, 'chat_count': chat_count}))
+
+                            for chat in project_chats.get(project_id, []):
+                                display_items.append(('chat', chat))
+
+                    # Add standalone chats (not in any project)
+                    if standalone_chats:
+                        display_items.append(('standalone_chats_header', None))
+                        for chat in standalone_chats:
+                            display_items.append(('chat', chat))
+
+                    if not display_items:
+                        console.print("[yellow]No chats available[/yellow]")
+                        continue
 
                     # Interactive selection with pure keyboard
-                    selected_index = [0]  # Mutable container for closure
+                    # Find first chat index (skip headers)
+                    first_chat_index = 0
+                    for i, (item_type, _) in enumerate(display_items):
+                        if item_type == 'chat':
+                            first_chat_index = i
+                            break
+
+                    selected_index = [first_chat_index]  # Mutable container for closure
                     result_chat = [None]   # Selected chat
 
                     def get_formatted_text():
@@ -377,19 +752,33 @@ def main():
                         lines.append(('class:help', "  ↑/↓: Navigate  |  Enter: Select  |  Esc: Cancel\n"))
                         lines.append(('', "  " + "─" * 70 + "\n\n"))
 
-                        # Chat list
-                        for i, chat_info in enumerate(chats):
-                            updated = chat_info['updated_at'][:10]
-                            name = chat_info['name'][:35]
-                            provider = chat_info['provider']
-                            msg_count = chat_info['message_count']
+                        # Display hierarchical list
+                        for i, (item_type, data) in enumerate(display_items):
+                            if item_type == 'namespace_header':
+                                namespace = data
+                                project_count = len(namespace_projects[namespace['id']])
+                                lines.append(('class:namespace', f" [Namespace: {namespace['name']} ({project_count} projects)]\n"))
+                            elif item_type == 'project_header':
+                                project = data['project']
+                                chat_count = data['chat_count']
+                                lines.append(('class:project', f"   [Project: {project['name']} ({chat_count} chats)]\n"))
+                            elif item_type == 'standalone_projects_header':
+                                lines.append(('class:namespace', f" [Standalone Projects]\n"))
+                            elif item_type == 'standalone_chats_header':
+                                lines.append(('class:project', f"   [Standalone Chats]\n"))
+                            elif item_type == 'chat':
+                                chat_info = data
+                                updated = chat_info['updated_at'][:10]
+                                name = chat_info['name'][:32]
+                                provider = chat_info['provider']
+                                msg_count = chat_info['message_count']
 
-                            if i == selected_index[0]:
-                                # Highlighted
-                                lines.append(('class:selected', f"  → {name:<37} {provider:<8} {msg_count:>3} msgs  {updated}\n"))
-                            else:
-                                # Normal
-                                lines.append(('', f"    {name:<37} {provider:<8} {msg_count:>3} msgs  {updated}\n"))
+                                if i == selected_index[0]:
+                                    # Highlighted
+                                    lines.append(('class:selected', f"     → {name:<34} {provider:<7} {msg_count:>2} msgs {updated}\n"))
+                                else:
+                                    # Normal
+                                    lines.append(('', f"       {name:<34} {provider:<7} {msg_count:>2} msgs {updated}\n"))
 
                         return lines
 
@@ -398,18 +787,32 @@ def main():
 
                     @kb.add('up')
                     def move_up(event):
-                        if selected_index[0] > 0:
-                            selected_index[0] -= 1
+                        # Skip headers
+                        new_index = selected_index[0] - 1
+                        while new_index >= 0:
+                            item_type, _ = display_items[new_index]
+                            if item_type == 'chat':
+                                selected_index[0] = new_index
+                                break
+                            new_index -= 1
 
                     @kb.add('down')
                     def move_down(event):
-                        if selected_index[0] < len(chats) - 1:
-                            selected_index[0] += 1
+                        # Skip headers
+                        new_index = selected_index[0] + 1
+                        while new_index < len(display_items):
+                            item_type, _ = display_items[new_index]
+                            if item_type == 'chat':
+                                selected_index[0] = new_index
+                                break
+                            new_index += 1
 
                     @kb.add('enter')
                     def select(event):
-                        result_chat[0] = chats[selected_index[0]]
-                        event.app.exit()
+                        item_type, data = display_items[selected_index[0]]
+                        if item_type == 'chat':
+                            result_chat[0] = data
+                            event.app.exit()
 
                     @kb.add('escape')
                     @kb.add('c-c')
@@ -503,6 +906,396 @@ def main():
                             console.print("[red]Error deleting chat[/red]")
                     else:
                         console.print("[dim]Deletion cancelled[/dim]")
+
+                    continue
+
+                # /namespace - namespace management commands
+                elif command == '/namespace':
+                    if not args:
+                        console.print("[yellow]Usage: /namespace <subcommand> [args][/yellow]")
+                        console.print("\nAvailable subcommands:")
+                        console.print("  [cyan]create <name> [--description <desc>][/cyan] - Create a new namespace")
+                        console.print("  [cyan]list[/cyan]                                  - List all namespaces")
+                        console.print("  [cyan]add <namespace> <project-id>[/cyan]          - Add project to namespace")
+                        console.print("  [cyan]remove <namespace> <project-id>[/cyan]       - Remove project from namespace")
+                        console.print("  [cyan]projects <namespace>[/cyan]                  - List projects in namespace")
+                        console.print("  [cyan]delete <namespace>[/cyan]                    - Delete a namespace")
+                        console.print("\nExamples:")
+                        console.print("  /namespace create work-projects --description 'All work-related projects'")
+                        console.print("  /namespace add work-projects proj123")
+                        console.print("  /namespace projects work-projects")
+                        continue
+
+                    # Parse subcommand
+                    subcommand, subargs = parse_subcommand(args)
+
+                    if not subcommand:
+                        console.print("[yellow]Usage: /namespace <subcommand> [args][/yellow]")
+                        console.print("[dim]Use /namespace without arguments to see available subcommands[/dim]")
+                        continue
+
+                    # /namespace create <name> [--description <desc>]
+                    if subcommand == 'create':
+                        if not subargs:
+                            console.print("[yellow]Usage: /namespace create <name> [--description <desc>][/yellow]")
+                            console.print("[dim]Examples:[/dim]")
+                            console.print("[dim]  /namespace create work-projects[/dim]")
+                            console.print("[dim]  /namespace create personal --description 'Personal projects'[/dim]")
+                            continue
+
+                        # Parse --description flag
+                        description, remaining_args = parse_quoted_flag(subargs, '--description')
+
+                        # Handle flag without value
+                        if description == '':
+                            console.print("[yellow]--description requires a value[/yellow]")
+                            continue
+
+                        # Get namespace name from remaining args
+                        namespace_name = remaining_args.strip() if remaining_args else None
+                        if not namespace_name:
+                            console.print("[yellow]Namespace name is required[/yellow]")
+                            console.print("[dim]Usage: /namespace create <name> [--description <desc>][/dim]")
+                            continue
+
+                        # Validate namespace name
+                        valid, error_msg = validate_name(namespace_name, "namespace")
+                        if not valid:
+                            console.print(f"[red]{error_msg}[/red]")
+                            continue
+
+                        try:
+                            namespace = namespace_manager.create_namespace(namespace_name, description)
+                            console.print(f"[green]✓ Created namespace: {namespace['name']}[/green]")
+                            console.print(f"[dim]Namespace ID: {namespace['id']}[/dim]")
+                            if description:
+                                console.print(f"[dim]Description: {description}[/dim]")
+                        except ValueError as e:
+                            console.print(f"[red]{e}[/red]")
+
+                    # /namespace list
+                    elif subcommand == 'list':
+                        namespaces = namespace_manager.list_namespaces(include_stats=True)
+
+                        if not namespaces:
+                            console.print("[dim]No namespaces yet. Create one with /namespace create <name>[/dim]")
+                            continue
+
+                        console.print("\n[bold]Namespaces:[/bold]")
+                        console.print("[dim]Name                     Projects  Description[/dim]")
+                        console.print("[dim]" + "─" * 70 + "[/dim]")
+
+                        for ns in namespaces:
+                            name = ns['name'][:25]
+                            project_count = ns['project_count']
+                            description = ns.get('description', '')[:35]
+                            console.print(f"{name:<25} {project_count:<9} {description}")
+
+                        console.print()
+
+                    # /namespace add <namespace> <project-id>
+                    elif subcommand == 'add':
+                        parts = subargs.split(maxsplit=1)
+                        if len(parts) < 2:
+                            console.print("[yellow]Usage: /namespace add <namespace> <project-id>[/yellow]")
+                            console.print("[dim]Example: /namespace add work-projects proj123[/dim]")
+                            continue
+
+                        namespace_name = parts[0]
+                        project_id = parts[1]
+
+                        result = namespace_manager.add_project(namespace_name, project_id)
+                        if result:
+                            console.print(f"[green]✓ Added project {project_id} to namespace {namespace_name}[/green]")
+                        else:
+                            console.print(f"[red]Namespace '{namespace_name}' not found[/red]")
+
+                    # /namespace remove <namespace> <project-id>
+                    elif subcommand == 'remove':
+                        parts = subargs.split(maxsplit=1)
+                        if len(parts) < 2:
+                            console.print("[yellow]Usage: /namespace remove <namespace> <project-id>[/yellow]")
+                            continue
+
+                        namespace_name = parts[0]
+                        project_id = parts[1]
+
+                        result = namespace_manager.remove_project(namespace_name, project_id)
+                        if result:
+                            console.print(f"[green]✓ Removed project {project_id} from namespace {namespace_name}[/green]")
+                        else:
+                            console.print(f"[red]Namespace or project not found[/red]")
+
+                    # /namespace projects <namespace>
+                    elif subcommand == 'projects':
+                        if not subargs:
+                            console.print("[yellow]Usage: /namespace projects <namespace>[/yellow]")
+                            continue
+
+                        namespace_name = subargs.strip()
+                        project_ids = namespace_manager.get_namespace_projects(namespace_name)
+
+                        if project_ids is None:
+                            console.print(f"[red]Namespace '{namespace_name}' not found[/red]")
+                            continue
+
+                        if not project_ids:
+                            console.print(f"[dim]No projects in namespace '{namespace_name}' yet[/dim]")
+                            continue
+
+                        # Get project details
+                        console.print(f"\n[bold]Projects in '{namespace_name}':[/bold]")
+                        console.print("[dim]ID       Name                          Chats  Last Updated[/dim]")
+                        console.print("[dim]" + "─" * 70 + "[/dim]")
+
+                        for project_id in project_ids:
+                            project = project_manager.get_project(project_id)
+                            if project:
+                                name = project['name'][:28] + '...' if len(project['name']) > 28 else project['name']
+                                chat_count = len(project.get('chat_ids', []))
+                                updated = project['updated_at'][:10]
+                                console.print(f"{project_id}  {name:<30} {chat_count:<6} {updated}")
+
+                        console.print()
+
+                    # /namespace delete <namespace>
+                    elif subcommand == 'delete':
+                        if not subargs:
+                            console.print("[yellow]Usage: /namespace delete <namespace>[/yellow]")
+                            continue
+
+                        namespace_name = subargs.strip()
+                        namespace = namespace_manager.get_namespace(namespace_name)
+
+                        if not namespace:
+                            console.print(f"[red]Namespace '{namespace_name}' not found[/red]")
+                            continue
+
+                        # Show confirmation
+                        console.print(f"\n[yellow]⚠  Delete namespace: {namespace['name']}?[/yellow]")
+                        console.print(f"[dim]  Projects: {len(namespace.get('project_ids', []))}[/dim]")
+                        console.print(f"[dim]  Created: {namespace['created_at'][:10]}[/dim]")
+                        console.print("\n[dim]Note: This will NOT delete the projects, only the namespace.[/dim]")
+
+                        confirm = session.prompt("\nType 'yes' to confirm deletion: ").strip().lower()
+
+                        if confirm == 'yes':
+                            if namespace_manager.delete_namespace(namespace_name):
+                                console.print(f"[green]✓ Deleted namespace: {namespace['name']}[/green]")
+                            else:
+                                console.print("[red]Error deleting namespace[/red]")
+                        else:
+                            console.print("[dim]Deletion cancelled[/dim]")
+
+                    else:
+                        console.print(f"[red]Unknown subcommand: {subcommand}[/red]")
+                        console.print("[dim]Use /namespace without arguments to see available subcommands[/dim]")
+
+                    continue
+
+                # /project - project management commands
+                elif command == '/project':
+                    if not args:
+                        console.print("[yellow]Usage: /project <subcommand> [args][/yellow]")
+                        console.print("\nAvailable subcommands:")
+                        console.print("  [cyan]create <name> [--namespace <ns>][/cyan] - Create a new project")
+                        console.print("  [cyan]list[/cyan]                             - List all projects")
+                        console.print("  [cyan]add <project> <chat-id>[/cyan]          - Add chat to project")
+                        console.print("  [cyan]remove <project> <chat-id>[/cyan]       - Remove chat from project")
+                        console.print("  [cyan]chats <project>[/cyan]                  - List chats in project")
+                        console.print("  [cyan]delete <project>[/cyan]                 - Delete a project")
+                        console.print("\nExamples:")
+                        console.print("  /project create my-webapp")
+                        console.print("  /project create api-service --namespace work-projects")
+                        console.print("  /project add my-webapp abc123")
+                        console.print("  /project chats my-webapp")
+                        continue
+
+                    # Parse subcommand
+                    subcommand, subargs = parse_subcommand(args)
+
+                    if not subcommand:
+                        console.print("[yellow]Usage: /project <subcommand> [args][/yellow]")
+                        console.print("[dim]Use /project without arguments to see available subcommands[/dim]")
+                        continue
+
+                    # /project create <name> [--namespace <namespace>]
+                    if subcommand == 'create':
+                        if not subargs:
+                            console.print("[yellow]Usage: /project create <name> [--namespace <namespace>][/yellow]")
+                            console.print("[dim]Examples:[/dim]")
+                            console.print("[dim]  /project create my-webapp[/dim]")
+                            console.print("[dim]  /project create api-service --namespace work-projects[/dim]")
+                            continue
+
+                        # Parse --namespace flag
+                        namespace_name, remaining_args = parse_flag(subargs, '--namespace')
+
+                        # Handle flag without value
+                        if namespace_name == '':
+                            console.print("[yellow]--namespace requires a namespace name[/yellow]")
+                            continue
+
+                        # Get project name from remaining args
+                        project_name = remaining_args.strip() if remaining_args else None
+                        if not project_name:
+                            console.print("[yellow]Project name is required[/yellow]")
+                            console.print("[dim]Usage: /project create <name> [--namespace <namespace>][/dim]")
+                            continue
+
+                        # Validate project name
+                        valid, error_msg = validate_name(project_name, "project")
+                        if not valid:
+                            console.print(f"[red]{error_msg}[/red]")
+                            continue
+
+                        try:
+                            # Create project with namespace
+                            project = project_manager.create_project(project_name, namespace=namespace_name)
+                            console.print(f"[green]✓ Created project: {project['name']}[/green]")
+                            console.print(f"[dim]Project ID: {project['id']}[/dim]")
+
+                            # If namespace specified, add project to namespace
+                            if namespace_name:
+                                namespace = namespace_manager.get_namespace(namespace_name)
+                                if namespace:
+                                    namespace_manager.add_project(namespace_name, project['id'])
+                                    console.print(f"[dim]Added to namespace: {namespace_name}[/dim]")
+                                else:
+                                    console.print(f"[yellow]Warning: Namespace '{namespace_name}' not found. Project created without namespace.[/yellow]")
+
+                        except ValueError as e:
+                            console.print(f"[red]{e}[/red]")
+
+                    # /project list
+                    elif subcommand == 'list':
+                        projects = project_manager.list_projects(include_stats=True)
+
+                        if not projects:
+                            console.print("[dim]No projects yet. Create one with /project create <name>[/dim]")
+                            continue
+
+                        console.print("\n[bold]Projects:[/bold]")
+                        console.print("[dim]Name                     Chats  Last Updated[/dim]")
+                        console.print("[dim]" + "─" * 50 + "[/dim]")
+
+                        for proj in projects:
+                            name = proj['name'][:25]
+                            chat_count = proj['chat_count']
+                            updated = proj['updated_at'][:10]
+                            console.print(f"{name:<25} {chat_count:<6} {updated}")
+
+                        console.print()
+
+                    # /project add <project> <chat-id>
+                    elif subcommand == 'add':
+                        if len(subargs) < 2:
+                            console.print("[yellow]Usage: /project add <project> <chat-id>[/yellow]")
+                            console.print("[dim]Example: /project add my-webapp abc123[/dim]")
+                            continue
+
+                        project_name = subargs[0]
+                        chat_id = subargs[1]
+
+                        try:
+                            result = project_manager.add_chat(project_name, chat_id)
+                            if result:
+                                # Update chat index
+                                if chat_id in chat_manager.index['chats']:
+                                    chat_manager.index['chats'][chat_id]['project'] = project_manager.get_project(project_name)['id']
+                                    chat_manager._save_index()
+
+                                console.print(f"[green]✓ Added chat {chat_id} to project {project_name}[/green]")
+                            else:
+                                console.print(f"[red]Project '{project_name}' not found[/red]")
+                        except ValueError as e:
+                            console.print(f"[red]{e}[/red]")
+
+                    # /project remove <project> <chat-id>
+                    elif subcommand == 'remove':
+                        if len(subargs) < 2:
+                            console.print("[yellow]Usage: /project remove <project> <chat-id>[/yellow]")
+                            continue
+
+                        project_name = subargs[0]
+                        chat_id = subargs[1]
+
+                        result = project_manager.remove_chat(project_name, chat_id)
+                        if result:
+                            # Update chat index
+                            if chat_id in chat_manager.index['chats']:
+                                chat_manager.index['chats'][chat_id]['project'] = None
+                                chat_manager._save_index()
+
+                            console.print(f"[green]✓ Removed chat {chat_id} from project {project_name}[/green]")
+                        else:
+                            console.print(f"[red]Project or chat not found[/red]")
+
+                    # /project chats <project>
+                    elif subcommand == 'chats':
+                        if not subargs:
+                            console.print("[yellow]Usage: /project chats <project>[/yellow]")
+                            continue
+
+                        project_name = subargs[0]
+                        chat_ids = project_manager.get_project_chats(project_name)
+
+                        if chat_ids is None:
+                            console.print(f"[red]Project '{project_name}' not found[/red]")
+                            continue
+
+                        if not chat_ids:
+                            console.print(f"[dim]No chats in project '{project_name}' yet[/dim]")
+                            continue
+
+                        # Get chat details
+                        console.print(f"\n[bold]Chats in '{project_name}':[/bold]")
+                        console.print("[dim]ID       Name                          Provider  Messages  Last Updated[/dim]")
+                        console.print("[dim]" + "─" * 75 + "[/dim]")
+
+                        for chat_id in chat_ids:
+                            chat_info = chat_manager.index['chats'].get(chat_id)
+                            if chat_info:
+                                name = chat_info['name'][:28] + '...' if len(chat_info['name']) > 28 else chat_info['name']
+                                provider = chat_info['provider']
+                                msg_count = chat_info['message_count']
+                                updated = chat_info['updated_at'][:10]
+                                console.print(f"{chat_id}  {name:<30} {provider:<9} {msg_count:<9} {updated}")
+
+                        console.print()
+
+                    # /project delete <project>
+                    elif subcommand == 'delete':
+                        if not subargs:
+                            console.print("[yellow]Usage: /project delete <project>[/yellow]")
+                            continue
+
+                        project_name = subargs[0]
+                        project = project_manager.get_project(project_name)
+
+                        if not project:
+                            console.print(f"[red]Project '{project_name}' not found[/red]")
+                            continue
+
+                        # Show confirmation
+                        console.print(f"\n[yellow]⚠  Delete project: {project['name']}?[/yellow]")
+                        console.print(f"[dim]  Chats: {project['chat_count']}[/dim]")
+                        console.print(f"[dim]  Created: {project['created_at'][:10]}[/dim]")
+                        console.print("\n[dim]Note: This will NOT delete the chats, only the project.[/dim]")
+
+                        confirm = session.prompt("\nType 'yes' to confirm deletion: ").strip().lower()
+
+                        if confirm == 'yes':
+                            if project_manager.delete_project(project_name):
+                                console.print(f"[green]✓ Deleted project: {project['name']}[/green]")
+                            else:
+                                console.print("[red]Error deleting project[/red]")
+                        else:
+                            console.print("[dim]Deletion cancelled[/dim]")
+
+                    else:
+                        console.print(f"[yellow]Unknown subcommand: {subcommand}[/yellow]")
+                        console.print("Type [cyan]/project[/cyan] for usage information")
 
                     continue
 

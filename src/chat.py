@@ -69,9 +69,16 @@ class ChatManager:
         # Format: YYYYMMDD-HHMMSS_chat-name.md
         timestamp = chat['created_at'][:19].replace(':', '').replace('-', '').replace('T', '-')
         filename = f"{timestamp}_{chat['name']}.md"
+
+        # If chat belongs to a project, store in project's chats folder
+        if chat.get('project'):
+            project_chats_path = self.base_path / 'projects' / chat['project'] / 'chats'
+            project_chats_path.mkdir(parents=True, exist_ok=True)
+            return project_chats_path / filename
+
         return self.chats_path / filename
 
-    def create_chat(self, name=None, first_message=None):
+    def create_chat(self, name=None, first_message=None, project=None):
         """Create new chat and file immediately"""
         # Generate chat ID
         chat_id = self._generate_chat_id()
@@ -91,7 +98,8 @@ class ChatManager:
             'created_at': now,
             'updated_at': now,
             'message_count': 0,
-            'messages': []
+            'messages': [],
+            'project': project
         }
 
         # Create file immediately
@@ -106,6 +114,7 @@ class ChatManager:
             f.write(f"created_at: {chat['created_at']}\n")
             f.write(f"updated_at: {chat['updated_at']}\n")
             f.write(f"message_count: 0\n")
+            f.write(f"project: {chat.get('project') or 'null'}\n")
             f.write('---\n\n')
             f.write(f"# Chat: {chat['name']}\n\n")
 
@@ -117,7 +126,8 @@ class ChatManager:
             'created_at': chat['created_at'],
             'updated_at': chat['updated_at'],
             'provider': chat['provider'],
-            'message_count': 0
+            'message_count': 0,
+            'project': chat.get('project')
         }
         self._save_index()
 

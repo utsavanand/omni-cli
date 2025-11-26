@@ -6,17 +6,311 @@
 
 Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemini, and more.
 
-## Features
+**Key Features:** Multi-provider support • Hierarchical organization (Namespaces → Projects → Chats) • Context sharing • Persistent memory • Full-text search
 
-- **Multi-Provider Support** - Claude, Codex/OpenAI, and Gemini in one place
-- **Switch Providers Mid-Conversation** - Compare responses from different AIs
-- **Consult Multiple Providers** - Get merged insights from multiple AIs in one response
-- **Persistent Memory** - All conversations saved automatically with full context
-- **Context Sharing** - Ask Claude, then get Codex's opinion with full conversation history
-- **Project Organization** - Group related chats into projects
-- **Full-Text Search** - Find any conversation instantly
-- **Simple Interface** - Just type to chat, use `/commands` for features
-- **Markdown Storage** - All chats saved as readable markdown files
+## Quick Start
+
+```bash
+# Install
+npm install -g omni-cli
+
+# Start chatting
+omni
+```
+
+> **Note**: Omni CLI is a lightweight wrapper. Install at least one AI provider first: [Claude Code](https://claude.ai/download), [OpenAI](https://platform.openai.com/docs), or [Gemini](https://ai.google.dev/)
+
+---
+
+## Commands Reference
+
+### Getting Started
+
+**Start a conversation:**
+```bash
+omni
+omni> hello, can you help me with Python?
+```
+
+Just type naturally - no command needed. Your chat is auto-saved with a generated name.
+
+**Get help:**
+```bash
+omni> /help
+```
+
+**Exit:**
+```bash
+omni> /exit    # or /quit
+```
+
+---
+
+### Chat Management
+
+#### Create a Named Chat
+
+```bash
+omni> /new my-feature-chat
+```
+
+Creates a new chat with a specific name instead of auto-generated.
+
+**With a project:**
+```bash
+omni> /new authentication --project my-webapp
+```
+
+Creates a chat and adds it to a project in one command.
+
+#### List All Chats
+
+```bash
+omni> /list
+```
+
+Shows all your chats in hierarchical tree format:
+```
+📦 work-projects (2 projects)
+  📁 api-service (3 chats)
+    abc123  authentication               claude   5 msgs  2025-11-26
+    def456  user-management             claude   3 msgs  2025-11-25
+  📁 webapp (2 chats)
+    jkl012  frontend-design             claude   7 msgs  2025-11-23
+
+📄 Standalone Chats
+  stu901  quick-question                claude   1 msg   2025-11-20
+```
+
+#### Resume a Previous Chat
+
+```bash
+omni> /resume
+```
+
+Interactive menu with arrow keys to select which chat to continue:
+- ↑/↓ to navigate
+- Enter to select
+- Esc to cancel
+
+**Filter by keyword:**
+```bash
+omni> /resume authentication    # Shows only chats matching "authentication"
+omni> /resume claude            # Shows only chats using Claude provider
+```
+
+#### Search Chats
+
+```bash
+omni> /find OAuth              # or /search OAuth
+```
+
+Searches through all chat content for "OAuth" and shows matching chats.
+
+#### Delete a Chat
+
+```bash
+omni> /delete abc123           # By chat ID
+omni> /delete my-chat-name     # By name
+```
+
+Shows confirmation before deleting.
+
+---
+
+### Organization: Namespaces & Projects
+
+Organize your work with a three-level hierarchy:
+- **Namespaces** → Group of related projects (e.g., "work-projects", "personal")
+- **Projects** → Group of related chats (e.g., "api-service", "webapp")
+- **Chats** → Individual conversations
+
+#### Namespace Commands
+
+**Create a namespace:**
+```bash
+omni> /namespace create work-projects
+omni> /namespace create personal --description "Personal projects and learning"
+```
+
+**List all namespaces:**
+```bash
+omni> /namespace list
+```
+
+**Add a project to a namespace:**
+```bash
+omni> /namespace add work-projects my-webapp
+```
+
+**List projects in a namespace:**
+```bash
+omni> /namespace projects work-projects
+```
+
+**Remove a project from a namespace:**
+```bash
+omni> /namespace remove work-projects my-webapp
+```
+
+**Delete a namespace:**
+```bash
+omni> /namespace delete work-projects
+```
+Note: Deletes the namespace but preserves all projects.
+
+#### Project Commands
+
+**Create a project:**
+```bash
+omni> /project create my-webapp
+```
+
+**Create a project in a namespace:**
+```bash
+omni> /project create api-service --namespace work-projects
+```
+
+**List all projects:**
+```bash
+omni> /project list
+```
+
+**Add a chat to a project:**
+```bash
+omni> /project add my-webapp abc123
+```
+
+**List chats in a project:**
+```bash
+omni> /project chats my-webapp
+```
+
+**Remove a chat from a project:**
+```bash
+omni> /project remove my-webapp abc123
+```
+
+**Delete a project:**
+```bash
+omni> /project delete my-webapp
+```
+Note: Deletes the project but preserves all chats.
+
+---
+
+### Provider Management
+
+#### List Available Providers
+
+```bash
+omni> /providers
+```
+
+Shows which AI providers are installed and available:
+```
+Available Providers:
+→ claude     ✓ installed
+  codex      ✓ installed (OpenAI CLI)
+  gemini     ✗ not installed
+```
+
+#### Switch Providers
+
+```bash
+omni> /use codex
+```
+
+Switches to Codex for subsequent messages. The new provider sees the full conversation history!
+
+**Example workflow:**
+```bash
+omni> explain async/await in JavaScript
+# Claude responds...
+
+omni> /use codex
+omni> can you give me a code example?
+# Codex sees Claude's explanation and builds on it!
+```
+
+#### Consult Multiple Providers
+
+```bash
+omni> /consult codex explain the difference between async and defer
+```
+
+Sends your question to BOTH your current provider (e.g., Claude) and the specified provider (Codex), then:
+1. Collects both responses
+2. Uses your current provider to synthesize a merged answer
+3. Shows you both individual responses for comparison
+
+Perfect for complex questions where you want multiple perspectives!
+
+---
+
+## Common Workflows
+
+### Workflow 1: Organized Project Development
+
+```bash
+# 1. Create a namespace for work projects
+omni> /namespace create work-projects
+
+# 2. Create projects in the namespace
+omni> /project create api-service --namespace work-projects
+omni> /project create webapp --namespace work-projects
+
+# 3. Create chats within projects
+omni> /new authentication --project api-service
+omni> how do I implement OAuth 2.0 in Node.js?
+# ... conversation continues ...
+
+omni> /new database-design --project api-service
+omni> what's the best schema for user authentication?
+
+# 4. Later, resume to continue work
+omni> /resume
+# Navigate to your chat and press Enter
+```
+
+### Workflow 2: Multi-Provider Comparison
+
+```bash
+# Ask Claude first
+omni> what are the best practices for React state management?
+# Claude responds...
+
+# Get Codex's opinion
+omni> /use codex
+omni> what do you think about Redux vs Context API?
+# Codex sees the full conversation and responds
+
+# Get a merged perspective
+omni> /use claude
+omni> /consult codex summarize the key differences
+# Get a synthesized answer from both providers
+```
+
+### Workflow 3: Research and Organization
+
+```bash
+# Create a namespace for learning
+omni> /namespace create learning --description "Personal learning projects"
+
+# Create topic-specific projects
+omni> /project create machine-learning --namespace learning
+omni> /project create web3 --namespace learning
+
+# Create focused chats
+omni> /new neural-networks --project machine-learning
+omni> explain backpropagation in simple terms
+
+# Later, find related discussions
+omni> /find backpropagation
+omni> /project chats machine-learning
+```
+
+---
 
 ## Installation
 
@@ -24,281 +318,94 @@ Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemi
 
 Omni CLI is a **lightweight wrapper** - you need to install AI providers first:
 
-#### Required:
-- **Node.js 16+** - For omni-cli installation
-- **Python 3.9+** - Runtime requirement
+**Required:**
+- Node.js 16+
+- Python 3.9+
 
-#### AI Providers (Install at least one):
-
-**Claude Code** (Recommended):
-```bash
-# Download from https://claude.ai/download
-# Or install via npm (if available)
-```
-[Installation Guide →](https://claude.ai/download)
-
-**OpenAI/Codex CLI**:
-```bash
-# Installation instructions at OpenAI's docs
-```
-[Installation Guide →](https://platform.openai.com/docs)
-
-**Google Gemini CLI**:
-```bash
-# Installation instructions at Google AI
-```
-[Installation Guide →](https://ai.google.dev/)
-
-> **Note**: Omni CLI will detect which providers you have installed and make them available automatically. You don't need all of them - just install the ones you want to use!
+**AI Providers (Install at least one):**
+- [Claude Code](https://claude.ai/download) (Recommended)
+- [OpenAI/Codex CLI](https://platform.openai.com/docs)
+- [Google Gemini CLI](https://ai.google.dev/)
 
 ### Install Omni CLI
 
-**Option 1: From npm** (once published):
+**From npm:**
 ```bash
 npm install -g omni-cli
-
-# Run setup wizard to check providers
-omni --setup
+omni --setup    # Verify installation
 ```
 
-**Option 2: Local Development**
-
-Since this package is not yet published to npm, install it locally:
-
+**Local Development:**
 ```bash
-# Clone or navigate to the project directory
-cd /path/to/omni-cli
-
-# Install dependencies (automatically installs Python deps too)
+git clone https://github.com/omni-cli/omni.git
+cd omni
 npm install
-
-# Link the package globally for local testing
 npm link
-
-# Or run directly without linking
-node bin/omni
 ```
 
-> **Note**: `npm install` automatically runs the setup script which installs Python dependencies. No need to run `pip install` separately!
-
-### Verify Installation
-
-Run the setup wizard to check which providers are detected:
-
-```bash
-omni --setup
-```
-
-Output example:
-```
-Omni CLI Setup Wizard
-
-Checking for installed AI providers...
-
-✓ Claude Code              installed
-✗ OpenAI/Codex CLI        not installed
-✗ Google Gemini CLI       not installed
-
-✓ Found 1 provider(s): claude
-
-You're ready to use Omni CLI!
-Run omni to start chatting.
-```
-
-Then start chatting:
-```bash
-omni
-```
-
-### Publishing (For Maintainers)
-
-Once ready to publish:
-
-```bash
-npm publish
-```
-
-Then users can install via:
-```bash
-npm install -g omni-cli
-```
-
-## Quick Start
-
-```bash
-# Start omni
-omni
-
-# Detects installed providers automatically
-Installed providers: claude, codex
-Current provider: claude
-
-# Just type to chat
-omni> how do I reverse a string in python?
-
-# Switch providers anytime
-omni> /use codex
-omni> what's your take on this?
-# Codex sees the full conversation!
-
-# Use commands with /
-omni> /providers         # List available providers
-omni> /list              # List all chats
-omni> /search "auth"     # Search chats
-omni> /exit              # Exit
-```
-
-## Usage
-
-### Multi-Provider Chat (The Killer Feature!)
-
-```bash
-$ omni
-omni> explain async/await in JavaScript
-Thinking (claude)...
-[Claude's explanation...]
-
-omni> /use codex
-Switched to codex
-
-omni> can you give me a code example?
-Thinking (codex)...
-# Codex sees Claude's explanation and builds on it!
-[Codex's code example...]
-
-omni> /use gemini
-Switched to gemini
-
-omni> any performance tips?
-Thinking (gemini)...
-# Gemini sees the full conversation from both Claude and Codex!
-[Gemini's performance advice...]
-```
-
-### Consult Multiple Providers (Get Best of Both!)
-
-```bash
-$ omni
-omni> /consult codex explain the difference between async and defer in JavaScript
-
-💭 Consulting claude and codex...
-
-Merged Response:
-[Combined insights from both Claude and Codex, highlighting different perspectives
-and providing a comprehensive answer that synthesizes both responses]
-
-─── Individual Responses ───
-claude: Async and defer are both attributes for <script> tags that control...
-codex: The key difference is timing: async downloads in parallel and executes...
-```
-
-The `/consult` command:
-- Sends your question to BOTH your current provider and the specified provider
-- Collects both responses
-- Uses your current provider to synthesize a merged answer
-- Shows you both individual responses for comparison
-- Perfect for complex questions where you want multiple perspectives!
-
-### Provider Commands
-
-```bash
-# List all providers
-omni> /providers
-
-Available Providers:
-→ claude     ✓ installed
-  codex      ✓ installed (OpenAI CLI)
-  gemini     ✗ not installed
-
-# Switch providers
-omni> /use codex
-Switched to codex
-
-# Continue chatting with new provider
-omni> [new provider sees full conversation history]
-```
-
-### Resuming Previous Chats
-
-```bash
-# Interactive menu - use arrow keys to select
-omni> /resume
-
-# Filter by keyword
-omni> /resume oauth          # Shows only chats with "oauth" in the name
-omni> /resume claude         # Shows only chats using Claude provider
-
-# Navigate with arrow keys, Enter to select, Esc to cancel
-```
-
-### Available Commands
-
-**Getting Help:**
-- `/help` - Show detailed command reference with examples
-
-**Chat Management:**
-- `/new <name>` - Create a new named chat
-- `/list` - List all saved chats with metadata
-- `/resume [keyword]` - Interactive menu to resume a chat (use arrow keys to select)
-  - Without keyword: Shows all chats
-  - With keyword: Filters chats by name or provider (e.g., `/resume oauth` or `/resume claude`)
-- `/delete <id/name>` - Delete a chat (with confirmation)
-- `/find <term>` or `/search <term>` - Search through chat history
-
-**Provider Management:**
-- `/providers` - List all available providers
-- `/use <provider>` - Switch to different provider
-- `/consult <provider> <question>` - Get merged response from current and specified provider
-
-**Utilities:**
-- `/exit` or `/quit` - Exit omni
-
-## Current Status
-
-**MVP Complete - Ready for v0.1.0**
-
-**Core Features:**
-- Multi-provider support (Claude, Codex/OpenAI, Gemini)
-- Switch providers mid-conversation with full context sharing
-- `/consult` command to merge insights from multiple providers
-- Auto-generated chat names with manual naming option
-- Persistent file storage in Markdown format
-- Full conversation history preserved across sessions
-- Interactive `/resume` with arrow key navigation
-- Full-text search with `/find`
-- Complete help system
-- Chat deletion with confirmation
-
-**Coming in Future Versions:**
-- Projects and folders for better organization
-- `/merge` - Merge and summarize multiple chats
-- `/summarize` - Create chat summaries
-- `/archive` - Archive old chats
-- Export to HTML/PDF
-- Temporary chats with TTL
-- And more! (See todo.md)
+---
 
 ## Storage
 
-Chats are stored in `~/.omni/chats/` as Markdown files with the format:
+All chats are stored in `~/.omni/` as human-readable Markdown files:
+
+```
+~/.omni/
+├── chats/permanent/           # Standalone chats
+├── projects/                  # Project folders
+│   └── my-webapp/
+│       └── chats/            # Chats in this project
+├── namespaces/               # Namespace folders
+├── index.json               # Chat index
+├── projects.json            # Project index
+└── namespace_index.json     # Namespace index
+```
+
+Each chat file format:
 ```
 YYYYMMDD-HHMMSS_chat-name.md
 ```
 
-## Development
+---
 
+## Tips & Tricks
+
+**1. Use descriptive names:**
 ```bash
-# Clone the repo
-git clone https://github.com/omni-cli/omni.git
-cd omni
-
-# Install dependencies
-npm install
-pip install -r requirements.txt
-
-# Run locally
-python src/main.py
+omni> /new api-authentication-research --project backend
 ```
+
+**2. Organize as you go:**
+Create namespaces and projects early to keep things organized.
+
+**3. Use keywords in /resume:**
+```bash
+omni> /resume auth    # Quickly find authentication-related chats
+```
+
+**4. Search is powerful:**
+```bash
+omni> /find "error handling"    # Finds all discussions about errors
+```
+
+**5. Switch providers for different tasks:**
+- Claude: Great for explanations and discussions
+- Codex: Excellent for code generation
+- Gemini: Good for diverse perspectives
+
+---
+
+## Coming Soon
+
+- `/add-note` - Add manual notes to chats, projects, or namespaces
+- `/ask --project` - Ask questions scoped to specific projects
+- `/summarize` - Create chat summaries
+- `/archive` - Archive old chats
+- `/merge` - Merge and summarize multiple chats
+
+See [todo.md](todo.md) for full roadmap.
+
+---
 
 ## License
 
@@ -306,4 +413,4 @@ MIT
 
 ## Contributing
 
-Contributions welcome! Please open an issue or PR.
+Contributions welcome! Please open an issue or PR at [github.com/omni-cli/omni](https://github.com/omni-cli/omni)
