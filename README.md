@@ -10,15 +10,69 @@ Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemi
 
 ## Quick Start
 
-```bash
-# Install
-npm install -g omni-cli
+> **Important**: Omni CLI is a wrapper - you must install at least one AI provider first!
 
-# Start chatting
-omni
+### Step 1: Install an AI Provider
+
+Choose at least one (recommended: start with Claude Code):
+
+**Claude Code** (Recommended):
+```bash
+# Download from https://claude.ai/download
+# Or install via package manager:
+brew install --cask claude  # macOS
+
+# Verify installation:
+claude --version
 ```
 
-> **Note**: Omni CLI is a lightweight wrapper. Install at least one AI provider first: [Claude Code](https://claude.ai/download), [OpenAI](https://platform.openai.com/docs), or [Gemini](https://ai.google.dev/)
+**OpenAI/Codex CLI**:
+```bash
+# Install OpenAI CLI
+pip install openai-cli
+
+# Set API key:
+export OPENAI_API_KEY="your-api-key"
+
+# Verify:
+openai --version
+```
+
+**Google Gemini CLI**:
+```bash
+# Install Gemini CLI
+pip install google-generativeai
+
+# Verify:
+gemini --version
+```
+
+### Step 2: Install Omni CLI
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/omni-cli.git
+cd omni-cli
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Make executable
+chmod +x src/main.py
+
+# Run directly
+python3 src/main.py
+
+# Or create an alias in your ~/.bashrc or ~/.zshrc:
+alias omni='python3 /path/to/omni-cli/src/main.py'
+```
+
+### Step 3: Start Chatting
+
+```bash
+omni
+omni> hello, can you help me with Python?
+```
 
 ---
 
@@ -391,32 +445,56 @@ omni> /find "gradient descent"
 
 ### Prerequisites
 
-Omni CLI is a **lightweight wrapper** - you need to install AI providers first:
-
 **Required:**
-- Node.js 16+
-- Python 3.9+
+- Python 3.9 or higher
+- pip (Python package manager)
+- At least one AI provider installed (see Quick Start above)
 
-**AI Providers (Install at least one):**
-- [Claude Code](https://claude.ai/download) (Recommended)
-- [OpenAI/Codex CLI](https://platform.openai.com/docs)
-- [Google Gemini CLI](https://ai.google.dev/)
+**Optional:**
+- Git for cloning the repository
 
-### Install Omni CLI
+### Installation Steps
 
-**From npm:**
+See the **Quick Start** section above for complete installation instructions, including:
+1. Installing an AI provider (Claude Code, OpenAI CLI, or Gemini CLI)
+2. Cloning and setting up Omni CLI
+3. Creating an alias for easy access
+
+### Verify Installation
+
 ```bash
-npm install -g omni-cli
-omni --setup    # Verify installation
+# Check Python version
+python3 --version  # Should be 3.9+
+
+# Check AI provider is installed
+claude --version   # or openai --version, or gemini --version
+
+# Run Omni CLI
+python3 src/main.py
+
+# Or if you created an alias:
+omni
 ```
 
-**Local Development:**
-```bash
-git clone https://github.com/omni-cli/omni.git
-cd omni
-npm install
-npm link
-```
+### Troubleshooting
+
+**"No AI provider available" error:**
+- Make sure you've installed at least one AI provider
+- Verify it's in your PATH: `which claude` (or `which openai`)
+- Try running the provider directly: `claude --version`
+
+**Permission errors:**
+- Make sure main.py is executable: `chmod +x src/main.py`
+- Check Python permissions: `ls -la $(which python3)`
+
+**Import errors:**
+- Install dependencies: `pip install -r requirements.txt`
+- Use a virtual environment if needed:
+  ```bash
+  python3 -m venv venv
+  source venv/bin/activate  # On Windows: venv\Scripts\activate
+  pip install -r requirements.txt
+  ```
 
 ---
 

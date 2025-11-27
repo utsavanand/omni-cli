@@ -1,17 +1,21 @@
 {
   "name": "omni-cli",
   "version": "0.1.0",
-  "description": "Unified CLI wrapper for AI models (Claude, ChatGPT, Grok)",
+  "description": "Unified CLI wrapper for AI models - Claude, OpenAI, Gemini. Multi-provider chat with hierarchical organization and AI-powered summarization.",
   "keywords": [
     "ai",
     "cli",
     "claude",
-    "chatgpt",
     "openai",
-    "grok",
+    "gemini",
     "llm",
     "chat",
-    "assistant"
+    "assistant",
+    "summarization",
+    "knowledge-management",
+    "multi-provider",
+    "chatgpt",
+    "codex"
   ],
   "homepage": "https://github.com/omni-cli/omni#readme",
   "bugs": {
@@ -32,6 +36,7 @@
     "scripts/",
     "requirements.txt",
     "README.md",
+    "VIDEO_GUIDE.md",
     "LICENSE"
   ],
   "scripts": {
