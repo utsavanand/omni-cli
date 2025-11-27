@@ -16,55 +16,59 @@ Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemi
 
 Choose at least one (recommended: start with Claude Code):
 
-**Claude Code** (Recommended):
+**Claude Code CLI** (Recommended):
 ```bash
-# Download from https://claude.ai/download
-# Or install via package manager:
-brew install --cask claude  # macOS
+# macOS/Linux/WSL
+curl -fsSL https://claude.ai/install.sh | bash
 
-# Verify installation:
+# Or via npm
+npm i @anthropic-ai/claude-code
+
+# Verify installation
 claude --version
 ```
+📚 [Official Installation Guide](https://code.claude.com/docs/en/setup) | [GitHub](https://github.com/anthropics/claude-code)
 
-**OpenAI/Codex CLI**:
+**OpenAI Codex CLI**:
 ```bash
-# Install OpenAI CLI
-pip install openai-cli
+# Via npm (recommended)
+npm i -g @openai/codex
 
-# Set API key:
-export OPENAI_API_KEY="your-api-key"
+# Or via Homebrew (macOS)
+brew install --cask codex
 
-# Verify:
-openai --version
+# Verify installation
+codex --version
 ```
+📚 [Official Documentation](https://developers.openai.com/codex/cli) | [GitHub](https://github.com/openai/codex)
 
 **Google Gemini CLI**:
 ```bash
-# Install Gemini CLI
-pip install google-generativeai
+# Requires Node.js 20+
+npm install -g @google/gemini-cli
 
-# Verify:
+# Verify installation
 gemini --version
 ```
+📚 [Official Documentation](https://cloud.google.com/gemini/docs/codeassist/gemini-cli) | [GitHub](https://github.com/google-gemini/gemini-cli/)
 
 ### Step 2: Install Omni CLI
+
+> **Note**: Direct npm installation coming soon! For now, install locally:
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/omni-cli.git
 cd omni-cli
 
-# Install dependencies
-pip install -r requirements.txt
+# Install via npm (local)
+npm install
 
-# Make executable
-chmod +x src/main.py
+# The 'omni' command is now available
+omni
 
-# Run directly
+# Alternatively, run directly with Python
 python3 src/main.py
-
-# Or create an alias in your ~/.bashrc or ~/.zshrc:
-alias omni='python3 /path/to/omni-cli/src/main.py'
 ```
 
 ### Step 3: Start Chatting
@@ -447,54 +451,67 @@ omni> /find "gradient descent"
 
 **Required:**
 - Python 3.9 or higher
-- pip (Python package manager)
+- Node.js 16+ (for npm installation)
 - At least one AI provider installed (see Quick Start above)
 
-**Optional:**
-- Git for cloning the repository
+### Installation Methods
 
-### Installation Steps
+**Current (Local Installation):**
+```bash
+# Clone and install locally
+git clone https://github.com/yourusername/omni-cli.git
+cd omni-cli
+npm install
 
-See the **Quick Start** section above for complete installation instructions, including:
-1. Installing an AI provider (Claude Code, OpenAI CLI, or Gemini CLI)
-2. Cloning and setting up Omni CLI
-3. Creating an alias for easy access
+# Run Omni CLI
+omni
+```
+
+**Coming Soon (Global npm):**
+```bash
+# Direct installation from npm (not yet published)
+npm install -g omni-cli
+omni
+```
 
 ### Verify Installation
 
 ```bash
-# Check Python version
+# Check prerequisites
 python3 --version  # Should be 3.9+
+node --version     # Should be 16+
 
 # Check AI provider is installed
-claude --version   # or openai --version, or gemini --version
+claude --version   # or codex --version, or gemini --version
 
 # Run Omni CLI
-python3 src/main.py
-
-# Or if you created an alias:
 omni
+
+# Check Omni CLI can detect providers
+omni
+omni> /providers
 ```
 
 ### Troubleshooting
 
 **"No AI provider available" error:**
-- Make sure you've installed at least one AI provider
-- Verify it's in your PATH: `which claude` (or `which openai`)
+- Make sure you've installed at least one AI provider (see Quick Start)
+- Verify it's in your PATH: `which claude` (or `which codex`, `which gemini`)
 - Try running the provider directly: `claude --version`
+- Check provider authentication (Codex and Gemini require sign-in on first launch)
+
+**"omni: command not found" error:**
+- Make sure you ran `npm install` in the omni-cli directory
+- Check that npm bin directory is in your PATH: `npm bin`
+- Try running directly: `./bin/omni` from the project directory
 
 **Permission errors:**
-- Make sure main.py is executable: `chmod +x src/main.py`
-- Check Python permissions: `ls -la $(which python3)`
+- Ensure bin/omni is executable: `chmod +x bin/omni`
+- On macOS, you may need to allow the app in System Settings > Privacy & Security
 
-**Import errors:**
-- Install dependencies: `pip install -r requirements.txt`
-- Use a virtual environment if needed:
-  ```bash
-  python3 -m venv venv
-  source venv/bin/activate  # On Windows: venv\Scripts\activate
-  pip install -r requirements.txt
-  ```
+**Module import errors:**
+- Install Python dependencies: `pip install -r requirements.txt`
+- Check Python version: `python3 --version` (must be 3.9+)
 
 ---
 
