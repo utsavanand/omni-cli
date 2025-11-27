@@ -260,6 +260,79 @@ class ChatManager:
 
         return True
 
+    def rename_chat(self, chat_id_or_name, new_name):
+        """
+        Rename a chat
+
+        Args:
+            chat_id_or_name: Chat ID or name
+            new_name: New chat name
+
+        Returns:
+            bool: True if renamed, False if not found
+
+        Raises:
+            ValueError: If new name already exists
+        """
+        import os
+
+        # Find chat by ID or name
+        chat_id = None
+        for cid, info in self.index['chats'].items():
+            if cid == chat_id_or_name or info.get('name') == chat_id_or_name:
+                chat_id = cid
+                break
+
+        if not chat_id:
+            return False
+
+        # Check if new name already exists
+        for cid, info in self.index['chats'].items():
+            if info.get('name') == new_name and cid != chat_id:
+                raise ValueError(f"Chat '{new_name}' already exists")
+
+        old_name = self.index['chats'][chat_id]['name']
+        old_file_path = Path(self.index['chats'][chat_id]['file_path'])
+
+        # Update name in index
+        self.index['chats'][chat_id]['name'] = new_name
+        self.index['chats'][chat_id]['updated_at'] = datetime.now().isoformat()
+
+        # Generate new file path with new name
+        # Keep the same timestamp prefix, just change the name part
+        old_filename = old_file_path.name
+        timestamp_part = old_filename.split('_')[0]  # YYYYMMDD-HHMMSS
+        new_filename = f"{timestamp_part}_{new_name}.md"
+        new_file_path = old_file_path.parent / new_filename
+
+        # Update file path in index
+        self.index['chats'][chat_id]['file_path'] = str(new_file_path)
+        self._save_index()
+
+        # Rename the actual file
+        try:
+            if old_file_path.exists():
+                os.rename(old_file_path, new_file_path)
+
+                # Update the chat name in the file content (frontmatter)
+                with open(new_file_path, 'r') as f:
+                    content = f.read()
+
+                # Replace name in frontmatter
+                content = content.replace(f'name: {old_name}\n', f'name: {new_name}\n')
+                content = content.replace(f'# Chat: {old_name}\n', f'# Chat: {new_name}\n')
+
+                with open(new_file_path, 'w') as f:
+                    f.write(content)
+        except Exception as e:
+            # Rollback if file operations fail
+            self.index['chats'][chat_id]['name'] = old_name
+            self.index['chats'][chat_id]['file_path'] = str(old_file_path)
+            self._save_index()
+            raise Exception(f"Failed to rename chat file: {e}")
+
+        return True
+
     def get_conversation_context(self, chat):
         """
         Get conversation context for passing to AI providers

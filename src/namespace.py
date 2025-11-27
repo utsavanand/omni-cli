@@ -163,3 +163,48 @@ class NamespaceManager:
             pass
 
         return True
+
+    def rename_namespace(self, namespace_name_or_id, new_name):
+        """
+        Rename a namespace
+
+        Args:
+            namespace_name_or_id: Current namespace name or ID
+            new_name: New namespace name
+
+        Returns:
+            bool: True if renamed, False if not found
+
+        Raises:
+            ValueError: If new name already exists
+        """
+        namespace = self.get_namespace(namespace_name_or_id)
+        if not namespace:
+            return False
+
+        # Check if new name already exists
+        for ns_id, ns in self.index['namespaces'].items():
+            if ns['name'] == new_name and ns_id != namespace['id']:
+                raise ValueError(f"Namespace '{new_name}' already exists")
+
+        old_name = namespace['name']
+        namespace_id = namespace['id']
+
+        # Update name in index
+        self.index['namespaces'][namespace_id]['name'] = new_name
+        self.index['namespaces'][namespace_id]['updated_at'] = datetime.now().isoformat()
+        self._save_index()
+
+        # Rename directory
+        old_dir = self.namespaces_path / old_name
+        new_dir = self.namespaces_path / new_name
+        try:
+            if old_dir.exists():
+                old_dir.rename(new_dir)
+        except Exception as e:
+            # Rollback if directory rename fails
+            self.index['namespaces'][namespace_id]['name'] = old_name
+            self._save_index()
+            raise Exception(f"Failed to rename namespace directory: {e}")
+
+        return True

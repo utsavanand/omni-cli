@@ -304,3 +304,27 @@ class ProjectManager:
         self._save_projects()
 
         return True
+
+    def set_namespace(self, project_id_or_name, namespace_id):
+        """
+        Set a project's namespace
+
+        Args:
+            project_id_or_name: Project ID or name
+            namespace_id: Namespace ID to set (or None to remove)
+
+        Returns:
+            bool: True if updated, False if project not found
+        """
+        project = self.get_project(project_id_or_name)
+        if not project:
+            return False
+
+        project_id = project['id']
+
+        # Update namespace
+        self.projects['projects'][project_id]['namespace'] = namespace_id
+        self.projects['projects'][project_id]['updated_at'] = datetime.now().isoformat()
+        self._save_projects()
+
+        return True

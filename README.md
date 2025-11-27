@@ -6,7 +6,7 @@
 
 Unified CLI wrapper for AI models - one interface for Claude, Codex/OpenAI, Gemini, and more.
 
-**Key Features:** Multi-provider support • Hierarchical organization (Namespaces → Projects → Chats) • Context sharing • Persistent memory • Full-text search
+**Key Features:** Multi-provider support • Hierarchical organization (Namespaces → Projects → Chats + Summaries) • Chat summarization & archiving • Context sharing • Persistent memory • Full-text search
 
 ## Quick Start
 
@@ -63,24 +63,39 @@ omni> /new authentication --project my-webapp
 
 Creates a chat and adds it to a project in one command.
 
-#### List All Chats
+#### Browse & Manage with /list
 
 ```bash
 omni> /list
 ```
 
-Shows all your chats in hierarchical tree format:
+Interactive browser for all your namespaces, projects, chats, and summaries:
 ```
 📦 work-projects (2 projects)
-  📁 api-service (3 chats)
-    abc123  authentication               claude   5 msgs  2025-11-26
-    def456  user-management             claude   3 msgs  2025-11-25
-  📁 webapp (2 chats)
-    jkl012  frontend-design             claude   7 msgs  2025-11-23
+  📁 api-service (3 chats, 1 summaries)
+    💬 authentication               claude   5 msgs
+    💬 user-management             claude   3 msgs
+    📄 research-summary            claude   long summary
+  📁 webapp (2 chats, 0 summaries)
+    💬 frontend-design             claude   7 msgs
 
-📄 Standalone Chats
-  stu901  quick-question                claude   1 msg   2025-11-20
+📦 learning (0 projects)
+
+📁 Standalone Projects
+  📁 side-project (1 chats, 0 summaries)
+
+💬 Standalone Chats
+  quick-question                   claude   1 msg
 ```
+
+**Interactive controls:**
+- **↑/↓**: Navigate through items
+- **Enter**: Resume chat or view summary (with formatted markdown)
+- **d**: Delete item (with confirmation)
+- **r**: Rename namespaces, projects, or chats
+- **Esc**: Exit back to prompt
+
+All actions loop back to the list, making it easy to manage multiple items!
 
 #### Resume a Previous Chat
 
@@ -116,14 +131,55 @@ omni> /delete my-chat-name     # By name
 
 Shows confirmation before deleting.
 
+#### Summarize & Archive Chats
+
+```bash
+omni> /summary my-chat-name
+omni> /summary abc123 --type short
+```
+
+Condenses a chat into an AI-generated summary and archives it:
+- **Two summary types:**
+  - `short`: 50-100 word concise summary
+  - `long` (default): Detailed summary with topics, solutions, code examples, and conclusions
+- **Original chat is deleted** and replaced with a markdown summary file
+- Summaries appear in `/list` with a 📄 icon
+- Press Enter in `/list` to view summary with formatted markdown
+
+**Example workflow:**
+```bash
+# Have a long research conversation
+omni> /new oauth-research --project backend
+omni> explain OAuth 2.0 flow in detail
+# ... many messages ...
+
+# Summarize when done to save space
+omni> /summary oauth-research --type long
+✓ Summary created: oauth-research
+  Type: long
+  Words: 234
+  Original chat deleted
+
+# View later in /list or search for it
+omni> /list
+# Press Enter on the summary to read it
+```
+
+**Benefits:**
+- Saves storage space by condensing long conversations
+- Creates searchable knowledge base of key insights
+- Maintains project organization (summaries stay in their projects)
+- AI-powered distillation captures important details
+
 ---
 
 ### Organization: Namespaces & Projects
 
-Organize your work with a three-level hierarchy:
+Organize your work with a four-level hierarchy:
 - **Namespaces** → Group of related projects (e.g., "work-projects", "personal")
-- **Projects** → Group of related chats (e.g., "api-service", "webapp")
-- **Chats** → Individual conversations
+- **Projects** → Group of related chats and summaries (e.g., "api-service", "webapp")
+- **Chats** → Individual active conversations
+- **Summaries** → Archived, condensed versions of chats
 
 #### Namespace Commands
 
@@ -291,7 +347,7 @@ omni> /consult codex summarize the key differences
 # Get a synthesized answer from both providers
 ```
 
-### Workflow 3: Research and Organization
+### Workflow 3: Research and Knowledge Management
 
 ```bash
 # Create a namespace for learning
@@ -301,13 +357,32 @@ omni> /namespace create learning --description "Personal learning projects"
 omni> /project create machine-learning --namespace learning
 omni> /project create web3 --namespace learning
 
-# Create focused chats
+# Create focused chats for deep research
 omni> /new neural-networks --project machine-learning
 omni> explain backpropagation in simple terms
+omni> how does gradient descent work?
+omni> show me a simple neural network implementation
+# ... lengthy conversation with code examples ...
 
-# Later, find related discussions
-omni> /find backpropagation
-omni> /project chats machine-learning
+# Summarize the research session to save space
+omni> /summary neural-networks --type long
+✓ Summary created: neural-networks
+  Type: long
+  Words: 312
+  Original chat deleted
+
+# Create more research chats
+omni> /new transformers --project machine-learning
+omni> explain transformer architecture
+# ... another long conversation ...
+
+# View all summaries in your project
+omni> /list
+# Navigate to machine-learning project
+# See both chats and summaries organized together
+
+# Later, search across summaries and chats
+omni> /find "gradient descent"
 ```
 
 ---
@@ -347,23 +422,49 @@ npm link
 
 ## Storage
 
-All chats are stored in `~/.omni/` as human-readable Markdown files:
+All data is stored in `~/.omni/` as human-readable Markdown files with JSON indexes:
 
 ```
 ~/.omni/
 ├── chats/permanent/           # Standalone chats
+├── summaries/                 # Standalone summaries
 ├── projects/                  # Project folders
 │   └── my-webapp/
-│       └── chats/            # Chats in this project
+│       ├── chats/            # Chats in this project
+│       └── summaries/        # Summaries in this project
 ├── namespaces/               # Namespace folders
 ├── index.json               # Chat index
+├── summary_index.json       # Summary index
 ├── projects.json            # Project index
 └── namespace_index.json     # Namespace index
 ```
 
-Each chat file format:
-```
-YYYYMMDD-HHMMSS_chat-name.md
+**File naming formats:**
+- Chats: `YYYYMMDD-HHMMSS_chat-name.md`
+- Summaries: `YYYYMMDD-HHMMSS_chat-name_summary.md`
+
+**Summary file structure:**
+```markdown
+---
+summary_id: abc12345
+name: oauth-research
+original_chat_id: xyz789
+type: long
+provider: claude
+created_at: 2025-11-26T10:30:00
+project: backend
+word_count: 234
+---
+
+# Summary: oauth-research
+
+**Type:** Long
+**Generated:** 2025-11-26
+**Original Chat:** xyz789
+
+---
+
+[AI-generated summary content with markdown formatting]
 ```
 
 ---
@@ -378,17 +479,26 @@ omni> /new api-authentication-research --project backend
 **2. Organize as you go:**
 Create namespaces and projects early to keep things organized.
 
-**3. Use keywords in /resume:**
+**3. Summarize long conversations:**
+After research or exploratory chats, use `/summary` to condense into searchable knowledge:
+```bash
+omni> /summary my-research --type long
+```
+
+**4. Use keywords in /resume:**
 ```bash
 omni> /resume auth    # Quickly find authentication-related chats
 ```
 
-**4. Search is powerful:**
+**5. Search is powerful:**
 ```bash
 omni> /find "error handling"    # Finds all discussions about errors
 ```
 
-**5. Switch providers for different tasks:**
+**6. Browse with /list:**
+Use the interactive `/list` command to navigate, view summaries, and manage everything in one place.
+
+**7. Switch providers for different tasks:**
 - Claude: Great for explanations and discussions
 - Codex: Excellent for code generation
 - Gemini: Good for diverse perspectives
@@ -399,9 +509,9 @@ omni> /find "error handling"    # Finds all discussions about errors
 
 - `/add-note` - Add manual notes to chats, projects, or namespaces
 - `/ask --project` - Ask questions scoped to specific projects
-- `/summarize` - Create chat summaries
-- `/archive` - Archive old chats
+- `/archive` - Archive old chats without summarizing
 - `/merge` - Merge and summarize multiple chats
+- Artifacts support - Store code snippets, configs, and files in projects
 
 See [todo.md](todo.md) for full roadmap.
 

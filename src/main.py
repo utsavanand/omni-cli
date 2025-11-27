@@ -28,6 +28,7 @@ from chat import ChatManager
 from providers import ProviderManager
 from project import ProjectManager
 from namespace import NamespaceManager
+from summary import SummaryManager
 
 # Initialize console for rich output
 console = Console()
@@ -257,6 +258,7 @@ def main():
     provider_manager = ProviderManager()
     project_manager = ProjectManager()
     namespace_manager = NamespaceManager()
+    summary_manager = SummaryManager()
 
     # Check if any provider is available
     if not provider_manager.has_providers():
@@ -322,6 +324,10 @@ def main():
   [cyan]/find <term>[/cyan]            Search through chat history
   [cyan]/search <term>[/cyan]          Alias for /find
                               Example: /find authentication
+  [cyan]/summary <id/name>[/cyan]      Summarize a chat and archive it
+                              Options: --type short|long (default: long)
+                              Example: /summary my-chat --type short
+                              Note: Original chat is deleted
   [cyan]/delete <id/name>[/cyan]       Delete a chat (with confirmation)
 
 [bold]Namespace Management:[/bold]
@@ -367,6 +373,7 @@ def main():
   omni> /use codex                         [dim]# Switch to Codex[/dim]
   omni> can you show code examples?        [dim]# Continue with new provider[/dim]
   omni> /consult gemini what's best?       [dim]# Get merged response[/dim]
+  omni> /summary abc123 --type short       [dim]# Summarize and archive chat[/dim]
   omni> /list                              [dim]# See all chats[/dim]
   omni> /resume                            [dim]# Resume previous chat[/dim]
 """
@@ -525,110 +532,337 @@ def main():
 
                 # /list - list all chats
                 elif command == '/list':
-                    chats = chat_manager.list_chats()
+                    # Loop to allow multiple operations
+                    keep_showing_list = True
 
-                    if not chats:
-                        console.print("[dim]No chats yet. Start chatting to create your first chat![/dim]")
-                        continue
+                    while keep_showing_list:
+                        chats = chat_manager.list_chats()
+                        summaries = summary_manager.list_summaries()
 
-                    # Get all namespaces and projects for hierarchy
-                    namespaces = namespace_manager.list_namespaces()
-                    namespace_lookup = {ns['id']: ns for ns in namespaces}
+                        if not chats and not summaries and not namespace_manager.list_namespaces() and not project_manager.list_projects():
+                            console.print("[dim]No chats, summaries, projects, or namespaces yet. Start chatting to create your first chat![/dim]")
+                            break
 
-                    projects = project_manager.list_projects()
-                    project_lookup = {p['id']: p for p in projects}
+                        # Get all namespaces and projects for hierarchy
+                        namespaces = namespace_manager.list_namespaces()
+                        namespace_lookup = {ns['id']: ns for ns in namespaces}
 
-                    # Group projects by namespace
-                    namespace_projects = {}
-                    standalone_projects = []
+                        projects = project_manager.list_projects()
+                        project_lookup = {p['id']: p for p in projects}
 
-                    for project in projects:
-                        namespace_id = project.get('namespace')
-                        if namespace_id and namespace_id in namespace_lookup:
+                        # Group projects by namespace
+                        namespace_projects = {}
+                        standalone_projects = []
+
+                        for project in projects:
+                            namespace_id = project.get('namespace')
+                            if namespace_id and namespace_id in namespace_lookup:
+                                if namespace_id not in namespace_projects:
+                                    namespace_projects[namespace_id] = []
+                                namespace_projects[namespace_id].append(project['id'])
+                            else:
+                                standalone_projects.append(project['id'])
+
+                        # Group chats by project
+                        project_chats = {}
+                        standalone_chats = []
+
+                        for chat in chats:
+                            project_id = chat.get('project')
+                            if project_id and project_id in project_lookup:
+                                if project_id not in project_chats:
+                                    project_chats[project_id] = []
+                                project_chats[project_id].append(chat)
+                            else:
+                                standalone_chats.append(chat)
+
+                        # Group summaries by project
+                        project_summaries = {}
+                        standalone_summaries = []
+
+                        for summary in summaries:
+                            project_id = summary.get('project')
+                            if project_id and project_id in project_lookup:
+                                if project_id not in project_summaries:
+                                    project_summaries[project_id] = []
+                                project_summaries[project_id].append(summary)
+                            else:
+                                standalone_summaries.append(summary)
+
+                        # Sort chats and summaries within each project by most recent
+                        for project_id in project_chats:
+                            project_chats[project_id].sort(key=lambda x: x['updated_at'], reverse=True)
+                        for project_id in project_summaries:
+                            project_summaries[project_id].sort(key=lambda x: x['created_at'], reverse=True)
+                        standalone_chats.sort(key=lambda x: x['updated_at'], reverse=True)
+                        standalone_summaries.sort(key=lambda x: x['created_at'], reverse=True)
+
+                        # Build flat list for navigation
+                        display_items = []  # (type, data) tuples
+
+                        # Add namespace → project → (chats + summaries) hierarchy
+                        for namespace_id, project_ids in namespace_projects.items():
+                            namespace = namespace_lookup[namespace_id]
+                            display_items.append(('namespace', namespace))
+
+                            for project_id in project_ids:
+                                project = project_lookup[project_id]
+                                display_items.append(('project', project))
+
+                                # Add chats for this project
+                                for chat in project_chats.get(project_id, []):
+                                    display_items.append(('chat', chat))
+
+                                # Add summaries for this project
+                                for summary in project_summaries.get(project_id, []):
+                                    display_items.append(('summary', summary))
+
+                        # Add empty namespaces (namespaces with no projects)
+                        for namespace_id, namespace in namespace_lookup.items():
                             if namespace_id not in namespace_projects:
-                                namespace_projects[namespace_id] = []
-                            namespace_projects[namespace_id].append(project['id'])
-                        else:
-                            standalone_projects.append(project['id'])
+                                display_items.append(('namespace', namespace))
 
-                    # Group chats by project
-                    project_chats = {}
-                    standalone_chats = []
+                        # Add standalone projects
+                        if standalone_projects:
+                            for project_id in standalone_projects:
+                                project = project_lookup[project_id]
+                                display_items.append(('project', project))
 
-                    for chat in chats:
-                        project_id = chat.get('project')
-                        if project_id and project_id in project_lookup:
-                            if project_id not in project_chats:
-                                project_chats[project_id] = []
-                            project_chats[project_id].append(chat)
-                        else:
-                            standalone_chats.append(chat)
+                                # Add chats for this project
+                                for chat in project_chats.get(project_id, []):
+                                    display_items.append(('chat', chat))
 
-                    # Sort chats within each project by most recent
-                    for project_id in project_chats:
-                        project_chats[project_id].sort(key=lambda x: x['updated_at'], reverse=True)
-                    standalone_chats.sort(key=lambda x: x['updated_at'], reverse=True)
+                                # Add summaries for this project
+                                for summary in project_summaries.get(project_id, []):
+                                    display_items.append(('summary', summary))
 
-                    # Display hierarchical list
-                    console.print("\n[bold]All Chats:[/bold]")
-                    console.print("[dim]" + "─" * 75 + "[/dim]\n")
-
-                    total_displayed = 0
-
-                    # Show namespace → project → chat hierarchy
-                    for namespace_id, project_ids in namespace_projects.items():
-                        namespace = namespace_lookup[namespace_id]
-                        console.print(f"[bold cyan]📦 {namespace['name']}[/bold cyan] [dim]({len(project_ids)} projects)[/dim]")
-
-                        for project_id in project_ids:
-                            project = project_lookup[project_id]
-                            chats_in_project = project_chats.get(project_id, [])
-                            console.print(f"  [bold]📁 {project['name']}[/bold] [dim]({len(chats_in_project)} chats)[/dim]")
-
-                            for chat in chats_in_project:
-                                name = chat['name'][:30]
-                                provider = chat['provider']
-                                msg_count = chat['message_count']
-                                updated = chat['updated_at'][:10]
-                                console.print(f"    [cyan]{chat['chat_id']}[/cyan]  {name:<32} {provider:<7} {msg_count:>2} msgs  {updated}")
-                                total_displayed += 1
-
-                        console.print()
-
-                    # Show standalone projects
-                    if standalone_projects:
-                        if namespace_projects:
-                            console.print("[bold cyan]📦 [Standalone Projects][/bold cyan]")
-
-                        for project_id in standalone_projects:
-                            project = project_lookup[project_id]
-                            chats_in_project = project_chats.get(project_id, [])
-                            console.print(f"  [bold]📁 {project['name']}[/bold] [dim]({len(chats_in_project)} chats)[/dim]")
-
-                            for chat in chats_in_project:
-                                name = chat['name'][:30]
-                                provider = chat['provider']
-                                msg_count = chat['message_count']
-                                updated = chat['updated_at'][:10]
-                                console.print(f"    [cyan]{chat['chat_id']}[/cyan]  {name:<32} {provider:<7} {msg_count:>2} msgs  {updated}")
-                                total_displayed += 1
-
-                        console.print()
-
-                    # Show standalone chats
-                    if standalone_chats:
-                        console.print("[bold cyan]📄 [Standalone Chats][/bold cyan]")
+                        # Add standalone chats
                         for chat in standalone_chats:
-                            name = chat['name'][:30]
-                            provider = chat['provider']
-                            msg_count = chat['message_count']
-                            updated = chat['updated_at'][:10]
-                            console.print(f"  [cyan]{chat['chat_id']}[/cyan]  {name:<32} {provider:<7} {msg_count:>2} msgs  {updated}")
-                            total_displayed += 1
+                            display_items.append(('chat', chat))
 
-                        console.print()
+                        # Add standalone summaries
+                        for summary in standalone_summaries:
+                            display_items.append(('summary', summary))
 
-                    console.print(f"[dim]Total: {total_displayed} chat(s)[/dim]\n")
+                        if not display_items:
+                            console.print("[dim]Nothing to display[/dim]")
+                            break
+
+                        # Interactive selection
+                        selected_index = [0]
+                        action_result = [None]  # ('action', data) or None
+
+                        def get_formatted_text():
+                            lines = []
+                            lines.append(('class:title', f"\n  Browse & Manage - {len(display_items)} items\n"))
+                            lines.append(('', "  " + "─" * 75 + "\n"))
+                            lines.append(('class:help', "  ↑/↓: Navigate  |  Enter: Open  |  d: Delete  |  r: Rename  |  Esc: Exit\n"))
+                            lines.append(('', "  " + "─" * 75 + "\n\n"))
+
+                            for i, (item_type, data) in enumerate(display_items):
+                                indent = ""
+                                icon = ""
+                                label = ""
+
+                                if item_type == 'namespace':
+                                    indent = " "
+                                    icon = "📦"
+                                    project_count = len(namespace_projects.get(data['id'], []))
+                                    label = f"{data['name']} ({project_count} projects)"
+                                elif item_type == 'project':
+                                    indent = "   "
+                                    icon = "📁"
+                                    chat_count = len(project_chats.get(data['id'], []))
+                                    summary_count = len(project_summaries.get(data['id'], []))
+                                    total = chat_count + summary_count
+                                    label = f"{data['name']} ({chat_count} chats, {summary_count} summaries)"
+                                elif item_type == 'chat':
+                                    indent = "     "
+                                    icon = "💬"
+                                    label = f"{data['name'][:35]:<37} {data['provider']:<7} {data['message_count']:>2} msgs"
+                                elif item_type == 'summary':
+                                    indent = "     "
+                                    icon = "📄"
+                                    summary_type = data.get('type', 'long')
+                                    label = f"{data['name'][:35]:<37} {data['provider']:<7} {summary_type} summary"
+
+                                if i == selected_index[0]:
+                                    lines.append(('class:selected', f"{indent}→ {icon} {label}\n"))
+                                else:
+                                    lines.append(('', f"{indent}  {icon} {label}\n"))
+
+                            return lines
+
+                        kb = KeyBindings()
+
+                        @kb.add('up')
+                        def move_up(event):
+                            if selected_index[0] > 0:
+                                selected_index[0] -= 1
+
+                        @kb.add('down')
+                        def move_down(event):
+                            if selected_index[0] < len(display_items) - 1:
+                                selected_index[0] += 1
+
+                        @kb.add('enter')
+                        def select_item(event):
+                            item_type, data = display_items[selected_index[0]]
+                            if item_type == 'chat':
+                                action_result[0] = ('resume', data)
+                                event.app.exit()
+                            elif item_type == 'summary':
+                                action_result[0] = ('view_summary', data)
+                                event.app.exit()
+
+                        @kb.add('d')
+                        def delete_item(event):
+                            action_result[0] = ('delete', display_items[selected_index[0]])
+                            event.app.exit()
+
+                        @kb.add('r')
+                        def rename_item(event):
+                            action_result[0] = ('rename', display_items[selected_index[0]])
+                            event.app.exit()
+
+                        @kb.add('escape')
+                        @kb.add('c-c')
+                        def cancel(event):
+                            action_result[0] = ('cancel', None)
+                            event.app.exit()
+
+                        control = FormattedTextControl(text=get_formatted_text, focusable=True)
+                        layout = Layout(Window(content=control, wrap_lines=True))
+                        app = Application(layout=layout, key_bindings=kb, full_screen=False, mouse_support=False)
+
+                        try:
+                            app.run()
+
+                            # Handle cancel/escape
+                            if action_result[0] and action_result[0][0] == 'cancel':
+                                keep_showing_list = False
+                            elif action_result[0]:
+                                action, item_data = action_result[0]
+                                item_type, data = item_data if action in ['delete', 'rename'] else (None, None)
+
+                                if action == 'resume':
+                                    # Resume chat and exit list
+                                    loaded_chat = chat_manager.load_chat(action_result[0][1]['chat_id'])
+                                    if loaded_chat:
+                                        current_chat = loaded_chat
+                                        console.print(f"\n[green]✓ Resumed: {current_chat['name']}[/green]")
+                                        console.print(f"[dim]  Provider: {current_chat['provider']} | Messages: {current_chat['message_count']}[/dim]\n")
+                                    keep_showing_list = False
+
+                                elif action == 'view_summary':
+                                    # View summary content and stay in list
+                                    summary_data = action_result[0][1]
+                                    loaded_summary = summary_manager.load_summary(summary_data['summary_id'])
+                                    if loaded_summary:
+                                        console.print(f"\n[bold cyan]Summary: {loaded_summary['name']}[/bold cyan]")
+                                        console.print(f"[dim]Type: {loaded_summary['type']} | Created: {loaded_summary['created_at'][:10]} | Provider: {loaded_summary['provider']}[/dim]")
+                                        console.print(f"[dim]Original Chat ID: {loaded_summary['original_chat_id']}[/dim]")
+                                        console.print("─" * 75)
+
+                                        # Display summary content
+                                        summary_md = Markdown(loaded_summary['content'])
+                                        console.print(summary_md)
+                                        console.print("─" * 75)
+
+                                        # Prompt to continue
+                                        session.prompt("\n[Press Enter to continue]")
+                                    else:
+                                        console.print(f"[red]Failed to load summary[/red]")
+                                        session.prompt("\n[Press Enter to continue]")
+
+                                elif action == 'delete':
+                                    # Delete item with confirmation
+                                    console.print()
+                                    if item_type == 'namespace':
+                                        console.print(f"[yellow]⚠  Delete namespace: {data['name']}?[/yellow]")
+                                        console.print(f"[dim]  Projects will be preserved[/dim]")
+                                    elif item_type == 'project':
+                                        console.print(f"[yellow]⚠  Delete project: {data['name']}?[/yellow]")
+                                        console.print(f"[dim]  Chats and summaries will be preserved[/dim]")
+                                    elif item_type == 'chat':
+                                        console.print(f"[yellow]⚠  Delete chat: {data['name']}?[/yellow]")
+                                        console.print(f"[dim]  ID: {data['chat_id']} | Messages: {data['message_count']}[/dim]")
+                                    elif item_type == 'summary':
+                                        console.print(f"[yellow]⚠  Delete summary: {data['name']}?[/yellow]")
+                                        console.print(f"[dim]  ID: {data['summary_id']} | Type: {data.get('type', 'long')}[/dim]")
+
+                                    confirm = session.prompt("\nType 'yes' to confirm: ").strip().lower()
+                                    if confirm == 'yes':
+                                        if item_type == 'namespace':
+                                            namespace_manager.delete_namespace(data['name'])
+                                            console.print(f"[green]✓ Deleted namespace: {data['name']}[/green]\n")
+                                        elif item_type == 'project':
+                                            project_manager.delete_project(data['name'])
+                                            console.print(f"[green]✓ Deleted project: {data['name']}[/green]\n")
+                                        elif item_type == 'chat':
+                                            chat_manager.delete_chat(data['chat_id'])
+                                            console.print(f"[green]✓ Deleted chat: {data['name']}[/green]\n")
+                                            if current_chat and current_chat.get('chat_id') == data['chat_id']:
+                                                current_chat = None
+                                        elif item_type == 'summary':
+                                            summary_manager.delete_summary(data['summary_id'])
+                                            console.print(f"[green]✓ Deleted summary: {data['name']}[/green]\n")
+                                    else:
+                                        console.print("[dim]Deletion cancelled[/dim]\n")
+
+                                elif action == 'rename':
+                                    # Rename item
+                                    console.print()
+                                    if item_type == 'namespace':
+                                        console.print(f"[cyan]Rename namespace: {data['name']}[/cyan]")
+                                        new_name = session.prompt("New name: ").strip()
+                                        if new_name:
+                                            try:
+                                                if namespace_manager.rename_namespace(data['id'], new_name):
+                                                    console.print(f"[green]✓ Renamed to: {new_name}[/green]\n")
+                                                else:
+                                                    console.print("[red]Failed to rename namespace[/red]\n")
+                                            except ValueError as e:
+                                                console.print(f"[red]{e}[/red]\n")
+                                            except Exception as e:
+                                                console.print(f"[red]Error: {e}[/red]\n")
+                                        else:
+                                            console.print("[dim]Rename cancelled[/dim]\n")
+                                    elif item_type == 'project':
+                                        console.print(f"[cyan]Rename project: {data['name']}[/cyan]")
+                                        new_name = session.prompt("New name: ").strip()
+                                        if new_name:
+                                            try:
+                                                if project_manager.rename_project(data['id'], new_name):
+                                                    console.print(f"[green]✓ Renamed to: {new_name}[/green]\n")
+                                                else:
+                                                    console.print("[red]Failed to rename project[/red]\n")
+                                            except Exception as e:
+                                                console.print(f"[red]Error: {e}[/red]\n")
+                                        else:
+                                            console.print("[dim]Rename cancelled[/dim]\n")
+                                    elif item_type == 'chat':
+                                        console.print(f"[cyan]Rename chat: {data['name']}[/cyan]")
+                                        new_name = session.prompt("New name: ").strip()
+                                        if new_name:
+                                            try:
+                                                if chat_manager.rename_chat(data['chat_id'], new_name):
+                                                    console.print(f"[green]✓ Renamed to: {new_name}[/green]\n")
+                                                    # Update current_chat if it was renamed
+                                                    if current_chat and current_chat.get('chat_id') == data['chat_id']:
+                                                        current_chat['name'] = new_name
+                                                else:
+                                                    console.print("[red]Failed to rename chat[/red]\n")
+                                            except ValueError as e:
+                                                console.print(f"[red]{e}[/red]\n")
+                                            except Exception as e:
+                                                console.print(f"[red]Error: {e}[/red]\n")
+                                        else:
+                                            console.print("[dim]Rename cancelled[/dim]\n")
+
+                        except Exception as e:
+                            console.print(f"[red]Error: {e}[/red]")
+
                     continue
 
                 # /resume - interactively resume a previous chat
@@ -909,6 +1143,129 @@ def main():
 
                     continue
 
+                # /summary - summarize a chat and archive it
+                elif command == '/summary':
+                    if not args:
+                        console.print("[yellow]Usage: /summary <chat-id or chat-name> [--type short|long][/yellow]")
+                        console.print("\n[dim]Examples:[/dim]")
+                        console.print("[dim]  /summary abc123              # Generate long summary[/dim]")
+                        console.print("[dim]  /summary my-chat --type short  # Generate 50-100 word summary[/dim]")
+                        console.print("\n[dim]Note: The original chat will be deleted and replaced with the summary[/dim]")
+                        continue
+
+                    # Parse --type flag
+                    summary_type, remaining_args = parse_flag(args, '--type')
+
+                    # Validate summary type
+                    if summary_type and summary_type not in ['short', 'long']:
+                        console.print("[yellow]--type must be either 'short' or 'long'[/yellow]")
+                        continue
+
+                    # Default to long if not specified
+                    if not summary_type:
+                        summary_type = 'long'
+
+                    # Get chat identifier from remaining args
+                    chat_identifier = remaining_args.strip() if remaining_args else None
+                    if not chat_identifier:
+                        console.print("[yellow]Chat ID or name is required[/yellow]")
+                        console.print("[dim]Usage: /summary <chat-id or chat-name> [--type short|long][/dim]")
+                        continue
+
+                    # Try to find and load the chat
+                    chat_to_summarize = chat_manager.load_chat(chat_identifier)
+
+                    if not chat_to_summarize:
+                        console.print(f"[red]Chat '{chat_identifier}' not found[/red]")
+                        console.print("[dim]Use /list to see available chats[/dim]")
+                        continue
+
+                    # Check if chat has messages
+                    if not chat_to_summarize.get('messages') or len(chat_to_summarize['messages']) == 0:
+                        console.print("[yellow]Chat has no messages to summarize[/yellow]")
+                        continue
+
+                    # Show confirmation
+                    console.print(f"\n[cyan]Summarize chat: {chat_to_summarize['name']}[/cyan]")
+                    console.print(f"[dim]  ID: {chat_to_summarize['chat_id']}[/dim]")
+                    console.print(f"[dim]  Messages: {chat_to_summarize['message_count']}[/dim]")
+                    console.print(f"[dim]  Type: {summary_type}[/dim]")
+                    console.print(f"[dim]  Last updated: {chat_to_summarize['updated_at'][:10]}[/dim]")
+                    console.print("\n[yellow]⚠  The original chat will be deleted and replaced with a summary file[/yellow]")
+
+                    confirm = session.prompt("\nType 'yes' to confirm: ").strip().lower()
+
+                    if confirm != 'yes':
+                        console.print("[dim]Summary cancelled[/dim]")
+                        continue
+
+                    # Generate summary using AI provider
+                    try:
+                        # Build conversation context
+                        conversation_text = []
+                        for msg in chat_to_summarize['messages']:
+                            role_label = "User" if msg['role'] == 'user' else "Assistant"
+                            conversation_text.append(f"{role_label}: {msg['content']}")
+
+                        full_conversation = "\n\n".join(conversation_text)
+
+                        # Create summary prompt based on type
+                        if summary_type == 'short':
+                            summary_prompt = f"""Please provide a concise summary of the following conversation in 50-100 words. Focus on the key topics discussed and main conclusions.
+
+Conversation:
+{full_conversation}
+
+Summary (50-100 words):"""
+                        else:  # long
+                            summary_prompt = f"""Please provide a detailed summary of the following conversation. Include:
+1. Main topics and questions discussed
+2. Key solutions or insights provided
+3. Important code examples or technical details
+4. Action items or next steps (if any)
+5. Overall conclusions
+
+Conversation:
+{full_conversation}
+
+Detailed Summary:"""
+
+                        # Show status while generating
+                        with console.status("[cyan]Generating summary...[/cyan]"):
+                            summary_content = provider_manager.send_message(summary_prompt)
+
+                        # Create summary
+                        summary = summary_manager.create_summary(
+                            chat_name=chat_to_summarize['name'],
+                            chat_id=chat_to_summarize['chat_id'],
+                            summary_content=summary_content,
+                            summary_type=summary_type,
+                            project=chat_to_summarize.get('project'),
+                            provider=provider_manager.get_current_provider_name()
+                        )
+
+                        # Delete the original chat
+                        chat_manager.delete_chat(chat_to_summarize['chat_id'])
+
+                        # Clear current_chat if it was summarized
+                        if current_chat and current_chat.get('chat_id') == chat_to_summarize['chat_id']:
+                            current_chat = None
+
+                        console.print(f"\n[green]✓ Summary created: {summary['name']}[/green]")
+                        console.print(f"[dim]  Type: {summary_type}[/dim]")
+                        console.print(f"[dim]  Words: {summary['word_count']}[/dim]")
+                        console.print(f"[dim]  Original chat deleted[/dim]")
+
+                        # Show preview of summary
+                        console.print("\n[cyan]Preview:[/cyan]")
+                        preview = summary_content[:200] + "..." if len(summary_content) > 200 else summary_content
+                        console.print(f"[dim]{preview}[/dim]\n")
+
+                    except Exception as e:
+                        console.print(f"[red]Error: {e}[/red]")
+
+                    continue
+
                 # /namespace - namespace management commands
                 elif command == '/namespace':
                     if not args:
@@ -1004,11 +1361,20 @@ def main():
                         namespace_name = parts[0]
                         project_id = parts[1]
 
+                        # Get namespace to get its ID
+                        namespace = namespace_manager.get_namespace(namespace_name)
+                        if not namespace:
+                            console.print(f"[red]Namespace '{namespace_name}' not found[/red]")
+                            continue
+
+                        # Add project to namespace
                         result = namespace_manager.add_project(namespace_name, project_id)
                         if result:
+                            # Also update the project's namespace field
+                            project_manager.set_namespace(project_id, namespace['id'])
                             console.print(f"[green]✓ Added project {project_id} to namespace {namespace_name}[/green]")
                         else:
-                            console.print(f"[red]Namespace '{namespace_name}' not found[/red]")
+                            console.print(f"[red]Failed to add project to namespace[/red]")
 
                     # /namespace remove <namespace> <project-id>
                     elif subcommand == 'remove':
@@ -1022,6 +1388,8 @@ def main():
 
                         result = namespace_manager.remove_project(namespace_name, project_id)
                         if result:
+                            # Also clear the project's namespace field
+                            project_manager.set_namespace(project_id, None)
                             console.print(f"[green]✓ Removed project {project_id} from namespace {namespace_name}[/green]")
                         else:
                             console.print(f"[red]Namespace or project not found[/red]")
